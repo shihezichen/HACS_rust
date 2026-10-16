@@ -1,0 +1,14 @@
+[package]
+name = "hacs-l3-domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS L3 协作域：群聊 / 待回应账 / 任务 / 会议 / 黑板 / 共享内容。"
+
+[dependencies]
+hacs-l0-host.workspace = true
+hacs-l1-transport.workspace = true
+hacs-l2-adapter.workspace = true
+hacs-x-identity.workspace = true

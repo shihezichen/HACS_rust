@@ -1,0 +1,15 @@
+[package]
+name = "hacs-l4-experience"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS L4 呈现层：静态壳同源托管 / 业务视图 / 网关（反代 · 鉴权跳转 · SSE 聚合）。"
+
+[dependencies]
+hacs-l0-host.workspace = true
+hacs-l1-transport.workspace = true
+hacs-l2-adapter.workspace = true
+hacs-l3-domain.workspace = true
+hacs-x-identity.workspace = true

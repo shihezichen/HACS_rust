@@ -1,0 +1,16 @@
+[package]
+name = "hacs-c"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS C 组合根：进程入口装配（只做装配与注入，不含业务与传输实现）。"
+
+[dependencies]
+hacs-x-identity.workspace = true
+hacs-l0-host.workspace = true
+hacs-l1-transport.workspace = true
+hacs-l2-adapter.workspace = true
+hacs-l3-domain.workspace = true
+hacs-l4-experience.workspace = true

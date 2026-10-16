@@ -1,0 +1,15 @@
+[package]
+name = "hacs-l0-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS L0 平台层：宿主事实唯一出处（路径 / 节点档案 / 名册 / 只读探针）。不依赖任何内部层。"
+
+[dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+
+[dev-dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }

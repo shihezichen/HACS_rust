@@ -1,0 +1,14 @@
+[package]
+name = "hacs-l1-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS L1 通信层：投信封 / 保投到 / 不重复 / 可观测 / 成员入网控制面。传输不含业务语义。"
+
+[dependencies]
+hacs-l0-host.workspace = true
+hacs-x-identity.workspace = true
+serde = "1.0.229"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }

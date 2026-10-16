@@ -1,0 +1,4 @@
+[toolchain]
+# 本机（Windows）用 GNU host 工具链：MinGW 链接器随 WinLibs 安装，无需 MSVC Build Tools。
+channel = "stable"
+components = ["rustfmt", "clippy"]

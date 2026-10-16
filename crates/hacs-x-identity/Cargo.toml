@@ -1,0 +1,10 @@
+[package]
+name = "hacs-x-identity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HACS X 横切：身份与授权（账号 / 会话 / 角色 / 密级）。可被任意层引用。"
+
+[dependencies]

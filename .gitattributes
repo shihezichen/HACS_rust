@@ -1,0 +1,12 @@
+# 源码一律 LF（四台节点三台是 Linux；避免 Windows 检出把 LF 变 CRLF 后门禁/对照失真）
+* text=auto eol=lf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Windows 脚本用 CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -1,0 +1,19 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# 私钥 / 凭据 / 环境真值（与 HACS 同一套入库纪律）
+.env
+secrets/
+*.pem
+*.key
+*.pass
+*.token
+!*.pass.example
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

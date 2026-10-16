@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hacs-x-identity",
+    "crates/hacs-l0-host",
+    "crates/hacs-l1-transport",
+    "crates/hacs-l2-adapter",
+    "crates/hacs-l3-domain",
+    "crates/hacs-l4-experience",
+    "crates/hacs-c",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+repository = "https://github.com/shihezichen/HACS_rust"
+description = "HACS 的 Rust 重写 —— Human-Agent Communication System（分层结构镜像 Python 版）"
+
+[workspace.dependencies]
+# 内部层件：层的依赖方向由此处声明固化 —— crate 只能用到自己在 Cargo.toml 里声明的层，
+# 于是 Python 版「分层门禁」的硬规则在 Rust 里成为**编译期事实**。
+hacs-x-identity = { path = "crates/hacs-x-identity" }
+hacs-l0-host = { path = "crates/hacs-l0-host" }
+hacs-l1-transport = { path = "crates/hacs-l1-transport" }
+hacs-l2-adapter = { path = "crates/hacs-l2-adapter" }
+hacs-l3-domain = { path = "crates/hacs-l3-domain" }
+hacs-l4-experience = { path = "crates/hacs-l4-experience" }
+
+[profile.release]
+# 内存/体积目标：单态化裁剪 + LTO + panic=abort（服务进程不需要 unwind）。
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
