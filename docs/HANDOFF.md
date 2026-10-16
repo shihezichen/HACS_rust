@@ -27,7 +27,7 @@
 ```
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
-P2  L1 其余件            ⏳ 未开始
+P2  L1 其余件            🟡 teamd 已落地（a2a_edge/a2a_call/team_roster/team_call/team_broadcast 待做）
 P3  L3 重服务（收益最大）  ⏳ 未开始
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
@@ -58,19 +58,23 @@ P5  L4 + C 收口 + 部署件   ⏳ 未开始
 | `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | 错误文本脱敏 |
 | `hacs-l2-adapter::cli_backend` | `node/l2_adapter/cli_backend.py` | CLI 成员后端纯逻辑（文本清洗 / prompt 拼接 / 模型解析 / uuid5 会话映射 / codex 会话落盘） |
 | `hacs-c::bin/cli_backend` | `node/l2_adapter/cli_backend.py` | **第一个 `[[bin]]`**：HTTP 装配（9970）+ 三成员 runner + 超时杀树 + busy 门闸 |
+| `hacs-l1-transport::teamd` | `node/l1_transport/teamd.py` | teamd 纯逻辑（凭据解析 / timeout 夹取 / 错误信封 / 有界队列+每成员闸门 / 计数器 / 单行日志） |
+| `hacs-c::bin/teamd` | `node/l1_transport/teamd.py` | **第二个 `[[bin]]`**：每成员独立 NATS 连接（心跳/退避重连）+ worker 池回调本机 A2A + 9960 管理口（/healthz /varz） |
 
 ### 验证口径（当前实测）
 
 | 命令 | 期望 |
 |---|---|
-| `cargo test` | **77 例全绿**（L0 23 · L1 14 · L2 34 · X 6） |
+| `cargo test` | **88 例全绿**（L0 23 · L1 25 · L2 34 · X 6） |
 | `cargo clippy --all-targets` | **0 警告** |
-| `cargo build --release` | 产出 `cli_backend` 二进制（hacs-c 首个 `[[bin]]`） |
+| `cargo build --release` | 产出 `cli_backend`、`teamd` 二进制 |
 
 > `cli_backend` 已在 Linux 上做过端到端验证（假 CLI 注入，对齐 Python
 > `tests/test_cli_backend.py` 的请求矩阵：401/404/502/503/504、ANSI 清洗、
 > 多轮上下文、超时杀树无残留、同成员串行跨成员并行、日志不记 key）。
 > uuid5 与 Python `uuid.uuid5(NAMESPACE_URL, ...)` 逐字节一致（有交叉验证钉死）。
+> `teamd` 做过 e2e 冒烟（凭据缺失 FATAL exit 2 / 多成员裸值拒绝 / 管理口路由）；
+> NATS 端到端（真连 nats-server 的收发/心跳）尚待 parity 装置补验。
 
 测试文件：`crates/*/tests/*.rs`（`parity.rs` / `node_profile.rs` / `agent_model.rs`）。
 判据是「与 Python 同口径」：env 优先顺序、平台默认值形状、名册规范序、**只读探针写不进去**、

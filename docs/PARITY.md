@@ -108,3 +108,10 @@
     时间戳形态不同。日志是诊断面，不进任何契约。
 16. **`Server:` 头 keep-alive**：`cli_backend` 与 Python 同为 HTTP/1.1 + `sys_version=""`
     （`Server: cli_backend/1.0`，逐字节一致）；`Date:` 头用 RFC1123 自算，格式一致。
+17. **`teamd` 的 PING 探活**：Python 版每 60s 发 `PING`；Rust 版用 `flush(5s)` +
+    `is_connected()` 组合替代（语义等价：探活失败即重连），间隔同为探活循环粒度。
+18. **`teamd` worker 回投连接**：Python worker 共用主连接回投；Rust 版每个 worker
+    自持一条 NATS 连接回投（避免 worker 长任务阻塞 reader 回调线程）。busy 回复
+    用短命连接（低频路径）。
+19. **`teamd` 日志时间戳**：Python 用 `time.strftime` 本地时区；Rust 侧按 UTC 简化
+    （诊断面，不影响协议 parity）。
