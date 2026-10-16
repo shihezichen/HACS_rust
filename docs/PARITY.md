@@ -132,3 +132,16 @@
 25. **`a2a_edge` 日志**：Python 一行一请求（`<方法> <路径> -> <码> from=<成员>`）；
     Rust 版暂以启动横幅 + stdout 打印为主，逐请求日志行待 web_gateway 日志钩子
     对齐后补。
+26. **`task_svc` 时间口径**：Python `datetime.now(CST).isoformat(timespec="seconds")`
+    → Rust 自实现 civil 历法（Hinnant 算法），输出逐字节同形 `YYYY-MM-DDTHH:MM:SS+08:00`；
+    `parse_iso` 接受任意 `±HH:MM` 偏移与 `Z`（对齐 `datetime.fromisoformat`）。
+27. **`task_svc` uuid4**：Python `uuid.uuid4().hex` → Rust 读 `/dev/urandom` 自实现
+    （不引 uuid crate）；`T-` + hex[:8]、`LT-` + hex[32] 形状一致。
+28. **`task_svc` 事务粒度**：Python `with self.conn:` 单事务；Rust rusqlite 默认
+    autocommit，report/ack 的多语句写以 Mutex 持锁粒度等价（单连接单写者，无并发
+    撕裂面）；`create` 的 IntegrityError 兜底路径逐条保留。
+29. **`task_svc` PATCH 响应**：Python `out["reply"] = reply_deliver(...)`；
+    Rust bin 侧 PATCH 处理器把 `task.reply` 提升到响应顶层（`{"ok","task","reply"}`），
+    形状一致。`--no-reply` / `reply_queued` / `autopost_disabled` 语义逐条对齐。
+30. **`task_svc` 白名单**：env `TASK_AGENT_WHITELIST` 未设时默认 `hermes,openclaw-nb`
+    （Python 模块级默认同值）；`--agent-whitelist` 覆盖。

@@ -28,7 +28,7 @@
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
-P3  L3 重服务（收益最大）  ⏳ 未开始
+P3  L3 重服务（收益最大）  🟡 task_svc 已落地（chat_svc / blackboard_svc / blackboard_view 待做）
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
 ```
@@ -67,12 +67,15 @@ P5  L4 + C 收口 + 部署件   ⏳ 未开始
 | `hacs-c::bin/a2a_call` | `node/l1_transport/a2a/a2a_call.py` | A2A HTTP 客户端（healthz/agents/card/call；A2A_TOKEN env 优先；公共参数任意位置） |
 | `hacs-l1-transport::a2a_edge` | `node/l1_transport/a2a/a2a_edge.py` | A2A 纯逻辑（SHA-256 鉴权反查 / 配置加载 / agent card / 终标记 / task_loop 开关 / OpenAI 形状） |
 | `hacs-c::bin/a2a_svc` | `node/l1_transport/a2a/a2a_edge.py`（+组合根 a2a_svc.py 现形态） | **A2A 边缘服务**（9920，HTTP/1.1 + `Server: a2a_svc/2.2`）：healthz/agents/agent-card/messages + B2 续跑循环四出口；能力端口（pressure 等）暂走降级口径 |
+| `hacs-l3-domain::task_svc` | `hub/l3_domain/task_svc.py` | Store 全量（create / next_for 队首 / report 按 task_id 幂等 / ack+lease / chain 冻结 / reply 派发**禁止代写** / 回帖台账）；CST ISO 时间口径自实现（civil 历法，逐字节对齐 `isoformat+08:00`）；est_tokens / clip_digest |
+| `hacs-l3-domain::task_svc_chat` | `task_svc.py::chat_post_message` | 回帖出站（POST /api/sessions/{sid}/messages，`X-Agent-Id` + `@all`） |
+| `hacs-c::bin/task_svc` | `hub/l3_domain/task_svc.py`（Handler+main） | **L3 第一个 `[[bin]]`**（9981）：全路由（health/tasks/next/ack/lease/chains/report/PATCH/DELETE）+ 回帖重试线程(30s) + lease 巡检线程(10s)；`CHAT_BASE` env 口径 |
 
 ### 验证口径（当前实测）
 
 | 命令 | 期望 |
 |---|---|
-| `cargo test` | **107 例全绿**（L0 23 · L1 45 · L2 34 · X 6） |
+| `cargo test` | **119 例全绿**（L0 23 · L1 45 · L2 34 · L3 12 · X 6） |
 | `cargo clippy --all-targets` | **0 警告** |
 | `cargo build --release` | 产出 `cli_backend`、`teamd`、`team_roster`、`team_call`、`team_broadcast`、`a2a_call`、`a2a_svc` |
 
@@ -174,7 +177,7 @@ Linux 节点（`lobster` / `top001` / `quantum`）上直接 `cargo build --relea
 | `chat_svc` | 9980 / 9984 | 3954 |
 | `blackboard_svc` | 9940 | 3957 |
 | `blackboard_view` | 9941 / 9942 | 3296 |
-| `task_svc` | 9981 | 871 |
+| `task_svc` | 9981 | 871 | ✅ 已完成 |
 
 > ⚠️ `blackboard_view` 落地前**必须先把 `X` 的会话令牌 / 角色密级 / 时间口径补齐**
 > （见已知偏差 10）。`chat_svc` 依赖 `agent_model`（已就绪）与 `view_auth`（未就绪）。
