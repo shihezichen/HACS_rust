@@ -21,6 +21,7 @@
 
 pub mod agent_model;
 pub mod agent_usage;
+pub mod cli_backend;
 pub mod ctx_watermark;
 pub mod logx;
 pub mod pg_literals;

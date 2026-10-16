@@ -26,7 +26,7 @@
 
 ```
 P0  骨架                 ✅ 完成
-P1  L2 适配层            🟡 仅剩 cli_backend
+P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ⏳ 未开始
 P3  L3 重服务（收益最大）  ⏳ 未开始
 P4  L3 其余件 + X 其余面  ⏳ 未开始
@@ -56,14 +56,21 @@ P5  L4 + C 收口 + 部署件   ⏳ 未开始
 | `hacs-l2-adapter::ctx_watermark` | `node/l2_adapter/ctx_watermark.py` | 水位薄壳 |
 | `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | 模型执行器适配（ssh 命令行 / 带超时子进程 / 输出解析）+ 展示名 |
 | `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | 错误文本脱敏 |
+| `hacs-l2-adapter::cli_backend` | `node/l2_adapter/cli_backend.py` | CLI 成员后端纯逻辑（文本清洗 / prompt 拼接 / 模型解析 / uuid5 会话映射 / codex 会话落盘） |
+| `hacs-c::bin/cli_backend` | `node/l2_adapter/cli_backend.py` | **第一个 `[[bin]]`**：HTTP 装配（9970）+ 三成员 runner + 超时杀树 + busy 门闸 |
 
 ### 验证口径（当前实测）
 
 | 命令 | 期望 |
 |---|---|
-| `cargo test` | **68 例全绿**（L0 23 · L1 14 · L2 25 · X 6） |
+| `cargo test` | **77 例全绿**（L0 23 · L1 14 · L2 34 · X 6） |
 | `cargo clippy --all-targets` | **0 警告** |
-| `cargo build` | 干净 |
+| `cargo build --release` | 产出 `cli_backend` 二进制（hacs-c 首个 `[[bin]]`） |
+
+> `cli_backend` 已在 Linux 上做过端到端验证（假 CLI 注入，对齐 Python
+> `tests/test_cli_backend.py` 的请求矩阵：401/404/502/503/504、ANSI 清洗、
+> 多轮上下文、超时杀树无残留、同成员串行跨成员并行、日志不记 key）。
+> uuid5 与 Python `uuid.uuid5(NAMESPACE_URL, ...)` 逐字节一致（有交叉验证钉死）。
 
 测试文件：`crates/*/tests/*.rs`（`parity.rs` / `node_profile.rs` / `agent_model.rs`）。
 判据是「与 Python 同口径」：env 优先顺序、平台默认值形状、名册规范序、**只读探针写不进去**、
@@ -138,15 +145,11 @@ Linux 节点（`lobster` / `top001` / `quantum`）上直接 `cargo build --relea
 
 ## 6 下一步（按顺序做）
 
-### 6.1 立刻可做：`cli_backend`（L2 最后一件，9970）
+### 6.1 ~~立刻可做：`cli_backend`（L2 最后一件，9970）~~ ✅ 已完成
 
-- Python 原件：`node/l2_adapter/cli_backend.py`（748 行）。
-- Rust 落点：`hacs-l2-adapter::cli_backend` + `hacs-c` 的 `[[bin]] cli_backend`。
-- **结构性意义**：这是**第一个走「组合根 + `[[bin]]`」装配路径**的件，会顺带立起
-  `hacs-c` 的二进制装配骨架。HTTP 面用已有的 `web_gateway`；子进程复用 `agent_model`
-  里那套带超时跑法（可考虑把它提成 L1/L2 的公共小件，但**别为了复用破坏既有判据**）。
-- 注意它的对外形态包含 **502/503/504 兜底**与一张请求矩阵（Python 侧有等价装置
-  `cli_backend_http_equiv.py` 与测试 `tests/test_cli_backend.py` 可作对照）。
+- 纯逻辑落 `hacs-l2-adapter::cli_backend`（uuid5 自实现零依赖、ANSI 清洗手写扫描器、
+  codex 会话映射原子落盘）；HTTP/进程装配落 `hacs-c::bin/cli_backend`。
+- 偏差登记见 `PARITY.md` §5（新增 13~15 条）。
 
 ### 6.2 然后 `P2`：L1 其余件
 
@@ -206,8 +209,7 @@ Linux 节点（`lobster` / `top001` / `quantum`）上直接 `cargo build --relea
 
 ## 10 未决 / 风险（如实记账）
 
-1. **`hacs-c` 还没有 `[[bin]]`** —— 目前所有件都是 lib，**跑不起来任何进程**；第一个 bin 随
-   `cli_backend` 落地。
+1. ~~**`hacs-c` 还没有 `[[bin]]`**~~ ✅ 已随 `cli_backend` 落地。
 2. **相（`hub/` vs `node/`）没有在 Rust 侧表达** —— Python 的「检查 6 相方向」是硬门禁，
    Rust 目前只镜像了**层**；需要时再加一刀（见 `ARCHITECTURE.md` §2 的代价段）。
 3. **未与 Python 版做过端到端对照** —— 现有 68 例是**单元/组件级**等价；跨语言 e2e 对照

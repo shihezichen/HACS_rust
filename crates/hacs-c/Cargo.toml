@@ -14,3 +14,4 @@ hacs-l1-transport.workspace = true
 hacs-l2-adapter.workspace = true
 hacs-l3-domain.workspace = true
 hacs-l4-experience.workspace = true
+serde_json = { version = "1.0.154", features = ["preserve_order"] }

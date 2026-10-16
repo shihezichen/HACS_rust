@@ -96,3 +96,15 @@
     （耗时），不参与任何判定。
 12. **`X` 横切只落了 `safe_err`**：`view_auth` 的会话令牌 / 角色密级 / 时间口径
     （`ts` / `parse_ts` / `beijing`）尚未迁移 —— `blackboard_view`（`P3`）落地前必须补齐。
+13. **`cli_backend` 的 stub 模式与默认 key 路径分隔符**：`--stub` 的回声桩在 Rust 侧用
+    `sh -c`（Python 用 `sys.executable -c`），回声行为一致；默认 key 文件路径 posix 落
+    `<runtime_dir>/cli-backend-key`（Python 字面量是 Windows 分隔符，posix 上由部署 env 注入，
+    两者在各自平台上等价）。
+14. **codex 会话 id 的 banner 正则**：Python 用 `session id:\s*<uuid27>` 宽松匹配；
+    Rust 用「`session id:` 后取 hex/`-` 段并按 8-4-4-4-12 校验」——对合法 UUID 两种口径同结果，
+    对畸形输出 Rust 更保守（不认）。会话抓不到只会走「首轮新建」路径，不影响正确性。
+15. **`cli_backend` 的日志格式**：Python 走 `logging`（`asctime levelname message`）；
+    Rust 侧是「unix 秒 + INFO + 单行」，字段/取值一致（`model= member= task= elapsed_ms= code= rc= pid=`），
+    时间戳形态不同。日志是诊断面，不进任何契约。
+16. **`Server:` 头 keep-alive**：`cli_backend` 与 Python 同为 HTTP/1.1 + `sys_version=""`
+    （`Server: cli_backend/1.0`，逐字节一致）；`Date:` 头用 RFC1123 自算，格式一致。
