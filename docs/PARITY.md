@@ -115,3 +115,10 @@
     用短命连接（低频路径）。
 19. **`teamd` 日志时间戳**：Python 用 `time.strftime` 本地时区；Rust 侧按 UTC 简化
     （诊断面，不影响协议 parity）。
+20. **`team_broadcast` 并行度**：Python 用 `threading.Semaphore`；Rust std 无信号量，
+    用 Mutex+Condvar 自实现（语义同：限并发、入参同序汇总）。
+21. **`team_call` elapsed 舍入**：Python `round(t,1)` 银行家舍入；Rust 按 0.1s 网格
+    四舍五入（诊断面，差异 <=0.05s）。
+22. **`teamd` 心跳载荷**：Python 载含 host/uptime_s/pid 等宿主字段；Rust 版当前只发
+    member/ts/v（roster 的 uptime/pid 列会显示空）——待 L0 node_profile 宿主事实
+    接入后补齐（偏差登记，不阻塞协议 parity）。

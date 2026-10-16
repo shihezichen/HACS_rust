@@ -27,7 +27,7 @@
 ```
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
-P2  L1 其余件            🟡 teamd 已落地（a2a_edge/a2a_call/team_roster/team_call/team_broadcast 待做）
+P2  L1 其余件            🟡 teamd / team_roster / team_call / team_broadcast / a2a_call 已落地（a2a_edge 964 行大件待做）
 P3  L3 重服务（收益最大）  ⏳ 未开始
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
@@ -60,14 +60,19 @@ P5  L4 + C 收口 + 部署件   ⏳ 未开始
 | `hacs-c::bin/cli_backend` | `node/l2_adapter/cli_backend.py` | **第一个 `[[bin]]`**：HTTP 装配（9970）+ 三成员 runner + 超时杀树 + busy 门闸 |
 | `hacs-l1-transport::teamd` | `node/l1_transport/teamd.py` | teamd 纯逻辑（凭据解析 / timeout 夹取 / 错误信封 / 有界队列+每成员闸门 / 计数器 / 单行日志） |
 | `hacs-c::bin/teamd` | `node/l1_transport/teamd.py` | **第二个 `[[bin]]`**：每成员独立 NATS 连接（心跳/退避重连）+ worker 池回调本机 A2A + 9960 管理口（/healthz /varz） |
+| `hacs-l1-transport::team_tools` | `team_roster/team_call/team_broadcast.py` | 三工具共享纯逻辑（心跳窗口 / 点名载荷 / 汇总行 / a2a 人类可读出口） |
+| `hacs-c::bin/team_roster` | `node/l1_transport/team_roster.py` | 订阅 `team.hb.>` 收心跳出成员表（exit 0/3/4） |
+| `hacs-c::bin/team_call` | `node/l1_transport/team_call.py` | NATS request/reply 点名（--dry-run/--json/--text-file，exit 0/3/4） |
+| `hacs-c::bin/team_broadcast` | `node/l1_transport/team_broadcast.py` | 并行扇出群发（限并发信号量、--all 扫心跳取名单、--no-wait） |
+| `hacs-c::bin/a2a_call` | `node/l1_transport/a2a/a2a_call.py` | A2A HTTP 客户端（healthz/agents/card/call；A2A_TOKEN env 优先；公共参数任意位置） |
 
 ### 验证口径（当前实测）
 
 | 命令 | 期望 |
 |---|---|
-| `cargo test` | **88 例全绿**（L0 23 · L1 25 · L2 34 · X 6） |
+| `cargo test` | **95 例全绿**（L0 23 · L1 33 · L2 34 · X 6） |
 | `cargo clippy --all-targets` | **0 警告** |
-| `cargo build --release` | 产出 `cli_backend`、`teamd` 二进制 |
+| `cargo build --release` | 产出 `cli_backend`、`teamd`、`team_roster`、`team_call`、`team_broadcast`、`a2a_call` |
 
 > `cli_backend` 已在 Linux 上做过端到端验证（假 CLI 注入，对齐 Python
 > `tests/test_cli_backend.py` 的请求矩阵：401/404/502/503/504、ANSI 清洗、
