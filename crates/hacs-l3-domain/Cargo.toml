@@ -12,3 +12,5 @@ hacs-l0-host.workspace = true
 hacs-l1-transport.workspace = true
 hacs-l2-adapter.workspace = true
 hacs-x-identity.workspace = true
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }

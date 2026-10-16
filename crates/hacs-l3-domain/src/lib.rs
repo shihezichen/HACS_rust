@@ -14,3 +14,6 @@
 
 /// 迁移占位：本 crate 尚未实现（见 README 的迁移路线图）。
 pub const MIGRATION_STATUS: &str = "pending";
+
+pub mod task_svc;
+pub mod task_svc_chat;
