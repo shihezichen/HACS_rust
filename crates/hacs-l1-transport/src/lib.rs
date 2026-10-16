@@ -18,6 +18,7 @@
 
 pub mod http_client;
 pub mod nats_client;
+pub mod teamd;
 pub mod web_gateway;
 
 /// L0 平台层（宿主事实的唯一出处）—— 通信层按依赖方向引用它。
