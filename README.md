@@ -5,7 +5,9 @@ Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（�
 同 NATS 主题），从而可以**逐台、逐服务替换并可随时回退**。
 
 - 对应 Python 原件：<https://github.com/shihezichen/HACS>（分层结构 / 端口表 / 契约以它为真源）。
-- 分支：`main`。可见性待定（先本地建仓，远端 `shihezichen/HACS_rust` 待推送）。
+- 分支：`main`。
+- **接手先读**：**[`docs/HANDOFF.md`](docs/HANDOFF.md)** —— 交接文档（进度 / 环境与工具链坑 /
+  关键决定 / 已知偏差 / 下一步 / 替换流程 / 复跑命令）。
 
 ## 三条工程口径
 
