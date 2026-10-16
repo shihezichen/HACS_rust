@@ -1,13 +1,21 @@
-//! # hacs-x-identity —— HACS 横切层（X）：身份与授权
+//! # hacs-x-identity —— HACS 横切层（X）：身份与授权 / 错误脱敏
 //!
-//! 对应 Python `hub/x/view_auth.py`：账号 / 会话 / 角色 / 密级。
+//! 对应 Python `hub/x/view_auth.py`：账号 / 会话 / 角色 / 密级 + `safe_err` 错误脱敏。
 //!
 //! **横切层不参与依赖方向判定** —— 可被任意层引用（见 `docs/ARCHITECTURE.md`）。
 //!
+//! | 模块 | 对应 Python | 职责 |
+//! |---|---|---|
+//! | [`redact`] | `view_auth.safe_err` | 错误文本脱敏（抹 DSN 口令再截断） |
+//!
 //! ## 迁移状态
 //!
-//! ⏳ 待迁移。Python 原件的可移植面（会话令牌签发/校验、角色与密级判定、
-//! SQLite 存储访问）将在本 crate 落地；落点遵循「存储句柄归 L0」的口径。
+//! 🟡 部分迁移：错误脱敏已落地（`agent_model` 需要它）。
+//!
+//! ⏳ 待迁移：会话令牌签发/校验 · 角色与密级判定 · 时间口径
+//! （`ts` / `parse_ts` / `beijing`，被 `blackboard_view` 使用）· SQLite 存储访问
+//! （落点遵循「存储句柄归 L0」的口径）。
 
-/// 迁移占位：本 crate 尚未实现（见 README 的迁移路线图）。
-pub const MIGRATION_STATUS: &str = "pending";
+pub mod redact;
+
+pub use redact::{safe_err, safe_err_with};

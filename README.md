@@ -22,10 +22,10 @@ Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（�
 
 | 路径 | 层 | 对应 Python | 状态 |
 |---|---|---|---|
-| `crates/hacs-x-identity/` | `X` 横切 | `hub/x/view_auth.py` | ⏳ 待迁移 |
+| `crates/hacs-x-identity/` | `X` 横切 | `hub/x/view_auth.py` | 🟡 部分迁移（错误脱敏） |
 | `crates/hacs-l0-host/` | `L0` 平台 | `node/l0_host/*` | ✅ 已迁移 |
 | `crates/hacs-l1-transport/` | `L1` 通信 | `node/l1_transport/*` · `hub/l1_relay/*` | 🟡 核心已迁移（+ HTTP 客户端） |
-| `crates/hacs-l2-adapter/` | `L2` 适配 | `node/l2_adapter/*` · `hub/l2_adapter/*` | 🟡 核心已迁移 |
+| `crates/hacs-l2-adapter/` | `L2` 适配 | `node/l2_adapter/*` · `hub/l2_adapter/*` | 🟡 仅剩 `cli_backend` |
 | `crates/hacs-l3-domain/` | `L3` 协作域 | `hub/l3_domain/*` | ⏳ 待迁移 |
 | `crates/hacs-l4-experience/` | `L4` 呈现 | `hub/l4_experience/*` | ⏳ 待迁移 |
 | `crates/hacs-c/` | `C` 组合根 | `node/c/*` | ⏳ 待迁移（`[[bin]]` 逐个加入） |
@@ -46,6 +46,8 @@ Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（�
 | `hacs-l2-adapter::pg_literals` | `hub/l2_adapter/pg_literals.py` | pgvector 字面量与时间归一（含 Python 风格 `repr(float)`） |
 | `hacs-l2-adapter::agent_usage` | `node/l2_adapter/agent_usage.py` | 上下文水位真源（后端分派 / 分母链 / 远端回退三层护栏） |
 | `hacs-l2-adapter::ctx_watermark` | `node/l2_adapter/ctx_watermark.py` | 水位薄壳（对外入口） |
+| `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | 模型执行器适配（ssh 命令行是契约 / 子进程带超时 / 输出解析）+ Agent 展示名 |
+| `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | 错误文本脱敏（抹 DSN 口令再截断 400 字符） |
 
 ## 跑法
 
@@ -76,9 +78,9 @@ NATS 客户端是自己实现的文本协议。零框架依赖直接服务于「
 - ✅ Rust 工具链 + workspace + 分层 crate 骨架（依赖方向编译期固化）。
 - ✅ **L0 全层**迁移完成（`node_paths` · `node_profile` · `member_roster`）。
 - 🟡 **L1 核心**迁移完成（`nats_client` · `web_gateway` · `http_client`）。
-- 🟡 **L2 核心**迁移完成（`pg_literals` · `agent_usage` · `ctx_watermark`，含远端水位回退的三层护栏）。
-- ✅ **49 个等价测试全绿**（网关线上字节形态 / NATS 对假服务端走完整握手 / 宿主只读探针只读性 /
-  名册规范序 / 平台默认值形状 / Python 风格浮点 `repr` / 四舍六入五成双 / 时间归一 / 分母链）；
-  `cargo clippy --all-targets` 0 警告。
-- ⏳ L2 余件（`agent_model` · `cli_backend`）与 `L3` / `L4` / `X` / `C`：待迁移
-  （`L3` 是内存大头，收益最大）。
+- 🟡 **L2** 迁移完成（`pg_literals` · `agent_usage` · `ctx_watermark` · `agent_model`），**仅剩 `cli_backend`**。
+- 🟡 **X 横切**部分迁移（错误脱敏 `safe_err` —— `agent_model` 的依赖）。
+- ✅ **68 个等价测试全绿**（网关线上字节形态 / NATS 对假服务端走完整握手 / 宿主只读探针只读性 /
+  名册规范序 / 平台默认值形状 / Python 风格浮点 `repr` / 四舍六入五成双 / 时间归一 / 分母链 /
+  ssh 命令行选项顺序 / 输出解析校验 / 脱敏正则口径）；`cargo clippy --all-targets` 0 警告。
+- ⏳ `cli_backend` 与 `L3` / `L4` / `C`：待迁移（`L3` 是内存大头，收益最大）。

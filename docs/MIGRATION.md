@@ -15,8 +15,7 @@
 
 ### `P1` · L2 适配层（先做，因为它是所有 L3 服务的共同依赖）
 
-🟡 **已落地**：`pg_literals` · `agent_usage` · `ctx_watermark`（+ L1 的 `http_client`）。
-⏳ **余下**：`agent_model`（子进程 / ssh / 目标主机档案）与 `cli_backend`（HTTP 面 + 子进程）。
+🟡 **余下**：`cli_backend`（HTTP 面 + 子进程，落 `hacs-c` 的 bin `9970`）。
 
 | Rust 落点 | Python 原件 | 状态 |
 |---|---|---|
@@ -24,7 +23,8 @@
 | `hacs-l2-adapter::agent_usage` | `node/l2_adapter/agent_usage.py` | ✅（第 ② 级模型目录见 PARITY 已知偏差 7） |
 | `hacs-l2-adapter::ctx_watermark` | `node/l2_adapter/ctx_watermark.py` | ✅ |
 | `hacs-l1-transport::http_client` | （Python 侧是 `urllib.request`） | ✅ |
-| `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | ⏳ |
+| `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | ✅（含 `safe_err` 依赖 → 顺带落了 `hacs-x-identity::redact`） |
+| `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | ✅（`X` 其余面仍待迁移） |
 | `hacs-l2-adapter::cli_backend` | `node/l2_adapter/cli_backend.py` | ⏳（落 `hacs-c` 的 bin 9970） |
 
 ### `P2` · L1 其余件

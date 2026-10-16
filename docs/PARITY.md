@@ -56,6 +56,8 @@
 | `L0 member_roster` | 档案顺序 == 规范序 / 查询不猜 / 契约词汇冻结 |
 | `L2 pg_literals` | 向量字面量逐字节（含 `nan`/`inf`）/ `repr(float)` 指数写法 / 时间归一与非法输入 → `None` |
 | `L2 agent_usage` | token 估算公式 / **四舍六入五成双** / 分母链最长匹配 / 生效配置仅 hermes 后端 / 未知后端不猜 |
+| `L2 agent_model` | ssh 命令行**选项顺序** / 远端路径跟目标主机走 / 解析校验与截断 / 失败一律降级不抛 / 展示名覆盖 |
+| `X redact` | 抹 `password/passfile/sslpassword=值`（保留关键词原大小写）/ `\S+` 空值不命中 / 400 字符截断 |
 
 ## 5 已知偏差（不消红，如实登记）
 
@@ -84,3 +86,13 @@
    写进 pgvector 的向量不影响检索结果）。已覆盖常见形态的逐字节断言。
 9. **`agent_usage` 的 debug 日志**：Python 走 `logging`；Rust 侧由 `HACS_DEBUG` 环境变量开关
    （非空且非 `0` 时写 stderr）。默认静默。
+10. **模块级 env 捕获 → 惰性求值**：Python 的 `agent_model` 在 **import 期**就把
+    `AGENT_TEAM_ETC_DIR` / `AGENT_TEAM_SSH_TARGET` / `AGENT_TEAM_DISPLAY_NAMES` 定死
+    （要求 env 先于 import）；Rust 侧一律**调用时**读取。行为上更正确（env 在进程启动前就设好，
+    两种口径等价），但在「同进程内运行期改 env」这种用法下两者会分叉 —— 那是 Python 的陷阱，
+    不是可依赖的行为。
+11. **`round(x, 2)`**：`agent_model` 的 `elapsed_s` 用 Rust 的 `(x*100).round()/100`，
+    与 Python `round(x, 2)` 的十进制四舍六入五成双在极边界值上可能差 0.01。这是**纯展示字段**
+    （耗时），不参与任何判定。
+12. **`X` 横切只落了 `safe_err`**：`view_auth` 的会话令牌 / 角色密级 / 时间口径
+    （`ts` / `parse_ts` / `beijing`）尚未迁移 —— `blackboard_view`（`P3`）落地前必须补齐。

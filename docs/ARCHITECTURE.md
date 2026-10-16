@@ -14,7 +14,7 @@
 | `L2` 适配 | `node/l2_adapter/*` `hub/l2_adapter/*` | `hacs-l2-adapter` | Agent 差异唯一落脚点 |
 | `L3` 协作域 | `hub/l3_domain/*` | `hacs-l3-domain` | 群聊 / 任务 / 会议 / 黑板 / 共享内容 |
 | `L4` 呈现 | `hub/l4_experience/*` | `hacs-l4-experience` | 静态壳同源托管 / 反代 / 鉴权跳转 |
-| `X` 横切 | `hub/x/view_auth.py` | `hacs-x-identity` | 身份与授权（可被任意层引用） |
+| `X` 横切 | `hub/x/view_auth.py` | `hacs-x-identity` | 身份与授权 / 错误脱敏（可被任意层引用） |
 
 ## 2 依赖方向 = 编译期事实
 
