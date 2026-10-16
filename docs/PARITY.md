@@ -145,3 +145,20 @@
     形状一致。`--no-reply` / `reply_queued` / `autopost_disabled` 语义逐条对齐。
 30. **`task_svc` 白名单**：env `TASK_AGENT_WHITELIST` 未设时默认 `hermes,openclaw-nb`
     （Python 模块级默认同值）；`--agent-whitelist` 覆盖。
+
+31. **`chat_svc` 访客解析**：Python 走 `view_auth.check_cookie`（会话 cookie）+ tailnet
+    免登录；Rust 版只认 tailnet 免登录（`HACS_TAILNET_CIDR` 覆盖，语义同 view_auth），
+    cookie 会话通道未接（无外部看板签发依赖时 401），其余鉴权/密级口径（owner 全看、
+    internal 起步、404 不泄露存在性）逐条对齐。
+32. **`chat_svc` PresenceProbe / 上下文水位 / 模型富化 worker**：三者都是增强能力——
+    Rust 版 `/healthz` 回 `presence={"nodes":{}}`、`enrich={"running":false}`；
+    `/todos/enrich` 恒 503 `enricher_not_running`；`_agents` 的 `online/last_hb_at`
+    恒 null（「未知」，不谎报在线）；agent 消息不挂 `meta.context` 水位。
+33. **`chat_svc` 静态托管 / 登录跳转 / 计算器反代**：`/login`、`/logout`、`/calc*`、
+    ui/ 静态与 SPA 兜底未移植（前端产物归 <MEMBER_ID>，Rust 侧无 ui/）——非 `/api`
+    路径一律 404 对象信封。
+34. **`chat_svc` chat_messages append-only 触发器**：Python 由 `sql/chat_schema.sql`
+    外部部署（触发器拒 UPDATE/DELETE）；Rust `ensure_schema` 兜底建表不含触发器
+    （E2E 测试库需要清库），生产行为依赖外部部署同一份 schema.sql。
+35. **`chat_svc` SSE `text/event-stream`**：Python 契约 ② 阶段的推流端点本版未在
+    Python 侧实现（501 兜底），Rust 同样落 501 `not_implemented`，行为一致。

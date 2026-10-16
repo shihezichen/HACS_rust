@@ -28,7 +28,7 @@
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
-P3  L3 重服务（收益最大）  🟡 task_svc 已落地（chat_svc / blackboard_svc / blackboard_view 待做）
+P3  L3 重服务（收益最大）  🟡 task_svc + chat_svc 已落地（blackboard_svc / blackboard_view 待做）
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
 ```
@@ -174,7 +174,7 @@ Linux 节点（`lobster` / `top001` / `quantum`）上直接 `cargo build --relea
 
 | 件 | 端口 | Python 行数 |
 |---|---|---|
-| `chat_svc` | 9980 / 9984 | 3954 |
+| `chat_svc` | 9980 / 9984 | 3954 | ✅ 已完成（L3 `chat_svc` 模块 + `hacs-c::bin/chat_svc` 9980） |
 | `blackboard_svc` | 9940 | 3957 |
 | `blackboard_view` | 9941 / 9942 | 3296 |
 | `task_svc` | 9981 | 871 | ✅ 已完成 |
