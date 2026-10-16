@@ -27,7 +27,7 @@
 ```
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
-P2  L1 其余件            🟡 teamd / team_roster / team_call / team_broadcast / a2a_call 已落地（a2a_edge 964 行大件待做）
+P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
 P3  L3 重服务（收益最大）  ⏳ 未开始
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
@@ -65,14 +65,16 @@ P5  L4 + C 收口 + 部署件   ⏳ 未开始
 | `hacs-c::bin/team_call` | `node/l1_transport/team_call.py` | NATS request/reply 点名（--dry-run/--json/--text-file，exit 0/3/4） |
 | `hacs-c::bin/team_broadcast` | `node/l1_transport/team_broadcast.py` | 并行扇出群发（限并发信号量、--all 扫心跳取名单、--no-wait） |
 | `hacs-c::bin/a2a_call` | `node/l1_transport/a2a/a2a_call.py` | A2A HTTP 客户端（healthz/agents/card/call；A2A_TOKEN env 优先；公共参数任意位置） |
+| `hacs-l1-transport::a2a_edge` | `node/l1_transport/a2a/a2a_edge.py` | A2A 纯逻辑（SHA-256 鉴权反查 / 配置加载 / agent card / 终标记 / task_loop 开关 / OpenAI 形状） |
+| `hacs-c::bin/a2a_svc` | `node/l1_transport/a2a/a2a_edge.py`（+组合根 a2a_svc.py 现形态） | **A2A 边缘服务**（9920，HTTP/1.1 + `Server: a2a_svc/2.2`）：healthz/agents/agent-card/messages + B2 续跑循环四出口；能力端口（pressure 等）暂走降级口径 |
 
 ### 验证口径（当前实测）
 
 | 命令 | 期望 |
 |---|---|
-| `cargo test` | **95 例全绿**（L0 23 · L1 33 · L2 34 · X 6） |
+| `cargo test` | **107 例全绿**（L0 23 · L1 45 · L2 34 · X 6） |
 | `cargo clippy --all-targets` | **0 警告** |
-| `cargo build --release` | 产出 `cli_backend`、`teamd`、`team_roster`、`team_call`、`team_broadcast`、`a2a_call` |
+| `cargo build --release` | 产出 `cli_backend`、`teamd`、`team_roster`、`team_call`、`team_broadcast`、`a2a_call`、`a2a_svc` |
 
 > `cli_backend` 已在 Linux 上做过端到端验证（假 CLI 注入，对齐 Python
 > `tests/test_cli_backend.py` 的请求矩阵：401/404/502/503/504、ANSI 清洗、

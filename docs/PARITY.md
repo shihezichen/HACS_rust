@@ -122,3 +122,13 @@
 22. **`teamd` 心跳载荷**：Python 载含 host/uptime_s/pid 等宿主字段；Rust 版当前只发
     member/ts/v（roster 的 uptime/pid 列会显示空）——待 L0 node_profile 宿主事实
     接入后补齐（偏差登记，不阻塞协议 parity）。
+23. **`a2a_edge` 能力端口降级**：Python 由组合根 a2a_svc.py 注入 backend_of /
+    session_headers / read_usage / pressure / get_routes；Rust 版 a2a_svc 目前
+    全部走降级口径（"other" / {} / None / None / 无额外路由），行为语义一致
+    （绝不编造数字），真实能力随层 C 组合根批次注入。
+24. **`a2a_edge` 续跑循环的上下文自愈**：软/硬阈值逻辑已实现常量与出口
+    （loop_stop 带回 ctx_soft/ctx_rotations），但 pressure 端口未注入前不触发
+    （Python 未注入时同样不触发）。
+25. **`a2a_edge` 日志**：Python 一行一请求（`<方法> <路径> -> <码> from=<成员>`）；
+    Rust 版暂以启动横幅 + stdout 打印为主，逐请求日志行待 web_gateway 日志钩子
+    对齐后补。
