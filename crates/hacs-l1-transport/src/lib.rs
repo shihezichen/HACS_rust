@@ -16,6 +16,7 @@
 //! ⏳ 待迁移：`teamd` · `team_call` · `team_broadcast` · `team_roster` · `team_cli_core` ·
 //! `group_watch_delivery` · `post_group` · `a2a/{a2a_edge,a2a_call}` · `gen_nats_conf`
 
+pub mod http_client;
 pub mod nats_client;
 pub mod web_gateway;
 

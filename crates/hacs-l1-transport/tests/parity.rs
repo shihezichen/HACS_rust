@@ -9,6 +9,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use hacs_l1_transport::http_client;
 use hacs_l1_transport::nats_client::{parse_addrs, read_secret_file, NatsClient, NatsConfig};
 use hacs_l1_transport::web_gateway::{Gateway, HttpError, Reply};
 
@@ -305,4 +306,38 @@ fn read_secret_file_strips_bom_and_whitespace() {
     std::fs::write(&f, "\u{feff}  s3cret\n").unwrap();
     assert_eq!(read_secret_file(f.to_str().unwrap()).unwrap(), "s3cret");
     assert!(read_secret_file(dir.join("missing").to_str().unwrap()).is_err());
+}
+
+// ------------------------------------------------------------------ HTTP 客户端
+
+#[test]
+fn quote_matches_python_urllib_quote() {
+    // 除 A-Za-z0-9_.-~ 外一律百分号编码
+    assert_eq!(http_client::quote("aA0_.-~"), "aA0_.-~");
+    assert_eq!(http_client::quote("a b/c?d=e&f"), "a%20b%2Fc%3Fd%3De%26f");
+    assert_eq!(
+        http_client::quote("a2a:claudecode:s-1"),
+        "a2a%3Aclaudecode%3As-1"
+    );
+    // UTF-8 逐字节
+    assert_eq!(http_client::quote("好"), "%E5%A5%BD");
+}
+
+#[test]
+fn http_client_reads_json_from_the_gateway() {
+    let gw = build_gateway();
+    let port = gw.serve_in_background("127.0.0.1", 0).unwrap();
+    let url = format!("http://127.0.0.1:{port}/healthz");
+    let (status, value) = http_client::get_json(&url, &[], Duration::from_secs(3)).unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(value, serde_json::json!({"ok": true}));
+}
+
+#[test]
+fn http_client_reports_unreachable_instead_of_hanging() {
+    // 端口没人听：必须报错，且受超时约束
+    let started = Instant::now();
+    let err = http_client::get("http://127.0.0.1:1/x", &[], Duration::from_millis(500));
+    assert!(err.is_err(), "连不上必须报错");
+    assert!(started.elapsed() < Duration::from_secs(5));
 }

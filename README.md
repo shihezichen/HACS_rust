@@ -24,8 +24,8 @@ Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（�
 |---|---|---|---|
 | `crates/hacs-x-identity/` | `X` 横切 | `hub/x/view_auth.py` | ⏳ 待迁移 |
 | `crates/hacs-l0-host/` | `L0` 平台 | `node/l0_host/*` | ✅ 已迁移 |
-| `crates/hacs-l1-transport/` | `L1` 通信 | `node/l1_transport/*` · `hub/l1_relay/*` | 🟡 核心已迁移 |
-| `crates/hacs-l2-adapter/` | `L2` 适配 | `node/l2_adapter/*` · `hub/l2_adapter/*` | ⏳ 待迁移 |
+| `crates/hacs-l1-transport/` | `L1` 通信 | `node/l1_transport/*` · `hub/l1_relay/*` | 🟡 核心已迁移（+ HTTP 客户端） |
+| `crates/hacs-l2-adapter/` | `L2` 适配 | `node/l2_adapter/*` · `hub/l2_adapter/*` | 🟡 核心已迁移 |
 | `crates/hacs-l3-domain/` | `L3` 协作域 | `hub/l3_domain/*` | ⏳ 待迁移 |
 | `crates/hacs-l4-experience/` | `L4` 呈现 | `hub/l4_experience/*` | ⏳ 待迁移 |
 | `crates/hacs-c/` | `C` 组合根 | `node/c/*` | ⏳ 待迁移（`[[bin]]` 逐个加入） |
@@ -42,6 +42,10 @@ Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（�
 | `hacs-l0-host::member_roster` | `member_roster.py` | 成员名册档案（纯数据 + 纯查询） |
 | `hacs-l1-transport::nats_client` | `nats_client.py` | 极简 NATS 文本协议客户端（多地址故障转移） |
 | `hacs-l1-transport::web_gateway` | `web_gateway.py` | HTTP 入口件：路由 / JSON 信封 / 前置与鉴权钩子 |
+| `hacs-l1-transport::http_client` | （Python 侧是 `urllib.request`） | 极简 HTTP/1.0 客户端（远端水位回退用） |
+| `hacs-l2-adapter::pg_literals` | `hub/l2_adapter/pg_literals.py` | pgvector 字面量与时间归一（含 Python 风格 `repr(float)`） |
+| `hacs-l2-adapter::agent_usage` | `node/l2_adapter/agent_usage.py` | 上下文水位真源（后端分派 / 分母链 / 远端回退三层护栏） |
+| `hacs-l2-adapter::ctx_watermark` | `node/l2_adapter/ctx_watermark.py` | 水位薄壳（对外入口） |
 
 ## 跑法
 
@@ -71,7 +75,10 @@ NATS 客户端是自己实现的文本协议。零框架依赖直接服务于「
 
 - ✅ Rust 工具链 + workspace + 分层 crate 骨架（依赖方向编译期固化）。
 - ✅ **L0 全层**迁移完成（`node_paths` · `node_profile` · `member_roster`）。
-- 🟡 **L1 核心**迁移完成（`nats_client` · `web_gateway`）；L1 其余件见 `MIGRATION.md`。
-- ✅ 34 个等价测试全绿（网关线上字节形态 / NATS 对假服务端走完整握手 / 宿主只读探针只读性 /
-  名册规范序 / 平台默认值形状）；`cargo clippy --all-targets` 0 警告。
-- ⏳ `L2` / `L3` / `L4` / `X` / `C`：待迁移（`L3` 是内存大头，收益最大）。
+- 🟡 **L1 核心**迁移完成（`nats_client` · `web_gateway` · `http_client`）。
+- 🟡 **L2 核心**迁移完成（`pg_literals` · `agent_usage` · `ctx_watermark`，含远端水位回退的三层护栏）。
+- ✅ **49 个等价测试全绿**（网关线上字节形态 / NATS 对假服务端走完整握手 / 宿主只读探针只读性 /
+  名册规范序 / 平台默认值形状 / Python 风格浮点 `repr` / 四舍六入五成双 / 时间归一 / 分母链）；
+  `cargo clippy --all-targets` 0 警告。
+- ⏳ L2 余件（`agent_model` · `cli_backend`）与 `L3` / `L4` / `X` / `C`：待迁移
+  （`L3` 是内存大头，收益最大）。

@@ -6,10 +6,23 @@
 //! 对应 Python：`node/l2_adapter/`（`agent_usage` · `cli_backend` · `ctx_watermark`）
 //! 与 `hub/l2_adapter/`（`agent_model` · `pg_literals`）。
 //!
+//! | 模块 | 对应 Python | 职责 |
+//! |---|---|---|
+//! | [`pg_literals`] | `pg_literals.py` | pgvector 字面量与时间归一的**单一出处**（纯函数） |
+//! | [`agent_usage`] | `agent_usage.py` | **上下文水位真源**（后端分派 / 分母链 / 远端回退护栏） |
+//! | [`ctx_watermark`] | `ctx_watermark.py` | 水位薄壳（对外入口，实现全在 `agent_usage`） |
+//!
 //! ## 迁移状态
 //!
-//! ⏳ 待迁移。计划顺序：`pg_literals`（纯函数，最易）→ `agent_usage`（依赖 L0 只读探针，
-//! 本 crate 已可承接）→ `agent_model`（子进程/ssh）→ `cli_backend`（HTTP 面 + 子进程）。
+//! ✅ 已迁移：`pg_literals` · `agent_usage` · `ctx_watermark`
+//!
+//! ⏳ 待迁移：`agent_model`（模型富化执行器 + 展示名）· `cli_backend`（CLI 类 Agent 统一后端）
 
-/// 迁移占位：本 crate 尚未实现（见 README 的迁移路线图）。
-pub const MIGRATION_STATUS: &str = "pending";
+pub mod agent_usage;
+pub mod ctx_watermark;
+pub mod logx;
+pub mod pg_literals;
+
+/// 依赖方向：本层可用 L0（宿主事实）与 L1（通信）。
+pub use hacs_l0_host::{member_roster, node_paths, node_profile};
+pub use hacs_l1_transport::http_client;

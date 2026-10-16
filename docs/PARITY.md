@@ -39,7 +39,7 @@
 3. 收件箱 `_INBOX.<pid>.<seq>.<tid>.<rand>` **进程内唯一**（并发多连接若撞车会出现
    「所有成员回复内容一模一样」的幽灵应答）。
 
-## 4 已验证面（当前 34 例）
+## 4 已验证面（当前 49 例）
 
 | 面 | 用例 |
 |---|---|
@@ -47,12 +47,15 @@
 | `web_gateway` 路由 | 精确路由 / 前缀路由 / 路径归一化（登记 `"/api/"` 命中 `"/api"`） |
 | `web_gateway` 兜底 | 默认 404 信封 / 未注册方法 501 / 钩子短路 / `HttpError` 短路 |
 | `web_gateway` 请求体 | 非法 JSON → 400 `bad_json` / 超限 → 413 `payload_too_large` |
+| `http_client` | `quote` 对齐 `urllib.parse.quote(safe="")` / 对真网关取 JSON / 连不上按超时报错 |
 | `nats_client` | 地址解析 / 对假服务端完整握手 / PUB-SUB / request-reply / 连不上给人话错误 |
 | `nats_client` 凭据 | 令牌文件去 BOM 去空白 |
 | `L0 node_paths` | env 优先与 trim / 平台默认值形状 / 默认目录必须已存在 |
 | `L0 node_profile` | 目标主机档案（登记 / 未登记兜底 / JSON 整表覆盖 / 坏 JSON 退回内置） |
 | `L0 node_profile` 探针 | Hermes 用量行与活跃消息 / 只读性 / 记录不在 → `None` 不猜 |
 | `L0 member_roster` | 档案顺序 == 规范序 / 查询不猜 / 契约词汇冻结 |
+| `L2 pg_literals` | 向量字面量逐字节（含 `nan`/`inf`）/ `repr(float)` 指数写法 / 时间归一与非法输入 → `None` |
+| `L2 agent_usage` | token 估算公式 / **四舍六入五成双** / 分母链最长匹配 / 生效配置仅 hermes 后端 / 未知后端不猜 |
 
 ## 5 已知偏差（不消红，如实登记）
 
@@ -71,3 +74,13 @@
    `[runtime_dir]`；Windows 部署把配置直接放在运行目录里 —— 与 Python 一致。
 6. **脱敏占位符**：`WIN_NODE_EXE` / `WIN_PI_CLI_JS` / `WIN_PI_WORKDIR` / `WIN_CODEX_WORKDIR` /
    `NT_TARGET_HOME` 等沿用 Python 源码仓的占位符口径（真值由 env 注入）。
+7. **`window_for` 的第 ② 级（Hermes 自带模型目录 `DEFAULT_CONTEXT_LENGTHS`）Rust 侧跳过**：
+   Python 靠 `sys.path` 注入后 `import agent.model_metadata` 取表；Rust 进程里没有 Python 解释器，
+   这级无法复刻。**影响面**：只有在「① 生效配置不命中、③ 兜底表不命中」时才可能少一个分母来源
+   —— 而 ④ 别名兜底（仅 hermes 后端）会接住绝大多数这类情况；最终仍取不到就返回 0 = 「不知道」，
+   调用方降级为不自愈（与 Python 同向，不会静默用错分母）。
+8. **`repr(float)` 的「最短表示撞车」边缘**：Rust `{:?}` 与 Python `repr` 都是最短往返十进制，
+   同族但**不是同一实现**，在极少数存在两个等长最短表示的浮点上可能各选一个（数值仍然都能往返，
+   写进 pgvector 的向量不影响检索结果）。已覆盖常见形态的逐字节断言。
+9. **`agent_usage` 的 debug 日志**：Python 走 `logging`；Rust 侧由 `HACS_DEBUG` 环境变量开关
+   （非空且非 `0` 时写 stderr）。默认静默。

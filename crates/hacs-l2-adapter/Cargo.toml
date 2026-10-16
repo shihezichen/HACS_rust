@@ -11,3 +11,4 @@ description = "HACS L2 适配层：Agent 差异唯一落脚点（调用 / 能力
 hacs-l0-host.workspace = true
 hacs-l1-transport.workspace = true
 hacs-x-identity.workspace = true
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
