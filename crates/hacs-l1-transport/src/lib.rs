@@ -18,6 +18,7 @@
 
 pub mod http_client;
 pub mod nats_client;
+pub mod team_tools;
 pub mod teamd;
 pub mod web_gateway;
 
