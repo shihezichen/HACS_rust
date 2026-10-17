@@ -33,6 +33,8 @@ P4  L3 其余件 + X 其余面  ✅ 完成（team_group / rt_remind / session_ct
 P5  L4 + C 收口 + 部署件   ✅ 完成：nodelet（53，3.4×）、team（54，9.9×）、post_group（55，8.9×）、scan_secrets（56，双树 clean + 伪造 token 拦截）、l4_experience 资产内嵌（57）；group_watch_delivery 已并入 group_watch bin（投递原语在组合根）
 
 **移植收官**：Python → Rust 分层移植（P0–P5）全部完成；workspace 262 测试全绿；内存收益 3.4×–18.5×（详见 PARITY）；偏差逐条登记 docs/PARITY.md。
+
+**E2E 联调补充（PARITY 58）**：本机真 NATS + teamd + a2a_svc + cli_backend 全链打通（say/who/meet/post_group），联调中修了 3 处 parity bug（teamd a2a 路径、worker 回信凭据、nats:// 前缀解析）。使用手册见 docs/USER_GUIDE.md。
 ```
 
 ### 已完成（3 个提交）

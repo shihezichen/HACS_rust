@@ -129,6 +129,9 @@ Windows 用 GNU host 工具链（本机无 MSVC）：先 `. .\scripts\dev-env.ps
 - **真源**：分层结构 / 端口表 / 契约以 [Python 版](https://github.com/shihezichen/HACS) 为准。
 - **PARITY**：所有已知偏差逐条登记在 [`docs/PARITY.md`](docs/PARITY.md)（57 条），不消红、如实记账；
   例如 md5 未实现（nodelet 指纹改 sha256[:8]，仅自观测不跨实现比对）、embedder 骨架化。
+- **部署使用**：从 [Releases](https://github.com/shihezichen/HACS_rust/releases) 下载对应平台包，
+  中枢机 / 成员机装什么、如何配置组网——见 **[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)**
+  （全部步骤实机验证过）。
 - **替换与回退**：逐服务把 systemd 单元 / 计划任务的 `ExecStart` 指向 Rust 二进制即可切换；
   行为对不上改回 Python 件即回退。流程见 [`docs/MIGRATION.md`](docs/MIGRATION.md)。
 - **不移植件**：`check_layers` / `check_layers_reconcile` / `gen_arch_doc`（分层已由 Cargo 依赖图
@@ -138,5 +141,6 @@ Windows 用 GNU host 工具链（本机无 MSVC）：先 `. .\scripts\dev-env.ps
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) —— 分层 ↔ crate 映射、依赖方向、关键实现决定
 - [`docs/PARITY.md`](docs/PARITY.md) —— 57 条与 Python 版的等价性记录与偏差登记
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) —— **使用手册**：部署、组网配置、故障速查
 - [`docs/MIGRATION.md`](docs/MIGRATION.md) —— 逐服务替换流程与回退
 - [`docs/HANDOFF.md`](docs/HANDOFF.md) —— 交接文档：环境坑、关键决定、复跑命令

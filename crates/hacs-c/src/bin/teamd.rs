@@ -97,14 +97,59 @@ fn main() {
         let a2a_token = a2a_token.clone();
         let stop = stop.clone();
         let nats_url_w = opts.nats_url.clone();
+        let creds_w = creds.clone();
         std::thread::spawn(move || {
-            let worker_conn = nats::NatsClient::new(
-                nats::NatsConfig::from_hosts_str(&nats_url_w, 4222).unwrap_or_else(|_| {
-                    nats::NatsConfig::from_hosts_str("127.0.0.1", 4222).unwrap()
-                }),
-            );
-            let _ = worker_conn.connect();
-            let conn_for_worker = worker_conn;
+            // 回信连接：按被处理成员各自的凭据建连（Python 口径：回信走该成员自己的连接）。
+            struct ReplyConns {
+                nats_url: String,
+                creds: std::collections::HashMap<String, (String, String)>,
+                conns: std::collections::HashMap<String, nats::NatsClient>,
+            }
+            impl ReplyConns {
+                fn publish(
+                    &mut self,
+                    member: &str,
+                    subject: &str,
+                    payload: &[u8],
+                ) -> Result<(), ()> {
+                    if !self.conns.contains_key(member) {
+                        // creds 的 value 是 (user, 口令文件路径) —— 读出真口令再用
+                        let (user, pass_file) = self
+                            .creds
+                            .get(member)
+                            .cloned()
+                            .unwrap_or_else(|| (member.to_string(), String::new()));
+                        let pass = hacs_l1_transport::nats_client::read_secret_file(&pass_file)
+                            .unwrap_or_default();
+                        let conn = nats::NatsClient::new(
+                            nats::NatsConfig::from_hosts_str(&self.nats_url, 4222)
+                                .unwrap_or_else(|_| {
+                                    nats::NatsConfig::from_hosts_str("127.0.0.1", 4222).unwrap()
+                                })
+                                .with_credentials(Some(user), Some(pass))
+                                .with_name("teamd-reply"),
+                        );
+                        if let Err(e) = conn.connect() {
+                            eprintln!("[teamd.reply] connect 失败 member={member}: {e:?}");
+                            return Err(());
+                        }
+                        self.conns.insert(member.to_string(), conn);
+                    }
+                    self.conns
+                        .get_mut(member)
+                        .unwrap()
+                        .publish(subject, payload, "")
+                        .map_err(|_| ())
+                }
+            }
+            let mut conns_map: std::collections::HashMap<String, nats::NatsClient> =
+                std::collections::HashMap::new();
+            let mut reply_conns = ReplyConns {
+                nats_url: nats_url_w.clone(),
+                creds: creds_w,
+                conns: conns_map,
+            };
+            let conn_for_worker = &mut reply_conns;
             loop {
                 if stop.load(Ordering::Relaxed) {
                     return;
@@ -119,7 +164,7 @@ fn main() {
                         Err(env) => {
                             counters.inc("bad_requests");
                             counters.inc("errors");
-                            let _ = conn_for_worker.publish(&reply, env.to_string().as_bytes(), "");
+                            let _ = conn_for_worker.publish(&member, &reply, env.to_string().as_bytes());
                             gate.release(&member);
                             continue;
                         }
@@ -135,6 +180,7 @@ fn main() {
                     a2a_token.as_deref(),
                     &text,
                     &caller,
+                    &member,
                     session_id.as_deref(),
                     timeout_s,
                 );
@@ -163,7 +209,7 @@ fn main() {
                     }
                 };
                 if conn_for_worker
-                    .publish(&reply, reply_payload.to_string().as_bytes(), "")
+                    .publish(&member, &reply, reply_payload.to_string().as_bytes())
                     .is_err()
                 {
                     counters.inc("hb_failed"); // 回投失败走同一计数（诊断面）
@@ -482,10 +528,12 @@ fn call_a2a(
     token: Option<&str>,
     text: &str,
     caller: &str,
+    member: &str,
     session_id: Option<&str>,
     timeout_s: f64,
 ) -> Result<Value, (String, String, Option<u16>)> {
-    let url = format!("{}/message", base_url.trim_end_matches('/'));
+    // Python 口径：POST <a2a_base>/a2a/<member>/messages（member = 本机被叫成员）
+    let url = format!("{}/a2a/{}/messages", base_url.trim_end_matches('/'), member);
     let mut body = json!({
         "text": text,
         "from": caller,

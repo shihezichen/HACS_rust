@@ -122,7 +122,7 @@ impl NatsConfig {
 pub fn parse_addrs(spec: &str, default_port: u16) -> Result<Vec<(String, u16)>, NatsError> {
     let mut out = Vec::new();
     for item in spec.split(',') {
-        let s = item.trim();
+        let s = item.trim().strip_prefix("nats://").unwrap_or(item.trim());
         if s.is_empty() {
             continue;
         }
