@@ -11,11 +11,9 @@
 | `P0` | `L0` 全层（`node_paths` · `node_profile` · `member_roster`） | ✅ |
 | `P0` | `L1` 核心（`nats_client` · `web_gateway`）+ 34 例等价测试 | ✅ |
 
-## 1 剩余阶段
+## 1 阶段（P1–P5 已全部完成，2026-10 收官）
 
-### `P1` · L2 适配层（先做，因为它是所有 L3 服务的共同依赖）
-
-🟡 **余下**：`cli_backend`（HTTP 面 + 子进程，落 `hacs-c` 的 bin `9970`）。
+### `P1` · L2 适配层 ✅
 
 | Rust 落点 | Python 原件 | 状态 |
 |---|---|---|
@@ -25,7 +23,7 @@
 | `hacs-l1-transport::http_client` | （Python 侧是 `urllib.request`） | ✅ |
 | `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | ✅（含 `safe_err` 依赖 → 顺带落了 `hacs-x-identity::redact`） |
 | `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | ✅（`X` 其余面仍待迁移） |
-| `hacs-l2-adapter::cli_backend` | `node/l2_adapter/cli_backend.py` | ⏳（落 `hacs-c` 的 bin 9970） |
+| `hacs-l2-adapter::cli_backend` | `node/l2_adapter/cli_backend.py` | ✅（bin 9970） |
 
 ### `P2` · L1 其余件
 
@@ -63,6 +61,10 @@
 - `hacs-c`：为每个进程入口加一个 `[[bin]]`，**单元名 / 端口 / argv 与 Python 件一字不差**
   （便于 systemd 单元与 Windows 计划任务原地切换）。
 - 部署件：`deploy/systemd/*.service` 与 Windows 计划任务的 `ExecStart` 改指 Rust 二进制。
+
+> **✅ P5 已完成（2026-10 收官）**：`serve`（含 l4 资产内嵌）· `nodelet` · `team` · `post_group` ·
+> `gen_nats_conf` · `roster_creds_mirror` · `scan_secrets` 全部落地（PARITY 52–57）。
+> `deploy/systemd` 单元文件本身不在移植范围 —— 上线切换时改 `ExecStart` 指向 Rust 二进制即可。
 
 ## 2 每个服务的替换流程（固定动作）
 
