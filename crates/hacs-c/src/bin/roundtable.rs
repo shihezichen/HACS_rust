@@ -11,8 +11,8 @@
 
 use hacs_l3_domain::roundtable_core::*;
 use hacs_l3_domain::roundtable_sched::{
-    dedup_names, unwrap_reply, Blackboard, NullBlackboard, NullStore, Roundtable,
-    RoundtableConfig, RunCtx, Store, Transport, DEFAULT_TOPIC, ERR_SIGNAL,
+    dedup_names, unwrap_reply, Blackboard, NullBlackboard, NullStore, Roundtable, RoundtableConfig,
+    RunCtx, Store, Transport, DEFAULT_TOPIC, ERR_SIGNAL,
 };
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -25,8 +25,7 @@ struct PgStore {
 }
 
 fn mk_client(dsn: &str) -> Result<postgres::Client, String> {
-    postgres::Client::connect(dsn, postgres::NoTls)
-        .map_err(|e| format!("数据库操作失败：{}", e))
+    postgres::Client::connect(dsn, postgres::NoTls).map_err(|e| format!("数据库操作失败：{}", e))
 }
 
 impl PgStore {
@@ -34,11 +33,20 @@ impl PgStore {
         if dsn.is_empty() {
             return Err("DSN 为空：检查 --dsn-file 指向的文件里有没有 BB_PG_DSN=".into());
         }
-        Ok(Self { conn: std::cell::RefCell::new(mk_client(dsn)?) })
+        Ok(Self {
+            conn: std::cell::RefCell::new(mk_client(dsn)?),
+        })
     }
 
-    fn query_rows(&mut self, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]) -> Result<Vec<postgres::Row>, String> {
-        self.conn.borrow_mut().query(sql, params).map_err(|e| format!("数据库操作失败：{e}"))
+    fn query_rows(
+        &mut self,
+        sql: &str,
+        params: &[&(dyn postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<postgres::Row>, String> {
+        self.conn
+            .borrow_mut()
+            .query(sql, params)
+            .map_err(|e| format!("数据库操作失败：{e}"))
     }
 }
 
@@ -81,7 +89,11 @@ impl Store for PgStore {
             let null = v.is_null();
             if JSONB.contains(&col) {
                 sets.push(format!("{col} = ${n}::text::jsonb"));
-                let text = if null { "null".to_string() } else { serde_json::to_string(v).unwrap_or_default() };
+                let text = if null {
+                    "null".to_string()
+                } else {
+                    serde_json::to_string(v).unwrap_or_default()
+                };
                 params.push(Box::new(text));
             } else if col == "attendance_rate" {
                 sets.push(format!("{col} = ${n}"));
@@ -91,7 +103,14 @@ impl Store for PgStore {
                 sets.push(format!("{col} = NULLIF(${n}::text,'')::timestamptz"));
                 params.push(Box::new(v.as_str().map(String::from).unwrap_or_default()));
             } else {
-                if ["round_no", "expected_count", "present_count", "absent_count"].contains(&col) {
+                if [
+                    "round_no",
+                    "expected_count",
+                    "present_count",
+                    "absent_count",
+                ]
+                .contains(&col)
+                {
                     sets.push(format!("{col} = ${n}"));
                     params.push(Box::new(v.as_i64().unwrap_or(0) as i32));
                 } else {
@@ -117,8 +136,10 @@ impl Store for PgStore {
             "UPDATE roundtable_sessions SET {} WHERE session_id = ${n}",
             sets.join(", ")
         );
-        let refs: Vec<&(dyn postgres::types::ToSql + Sync)> =
-            params.iter().map(|b| b.as_ref() as &(dyn postgres::types::ToSql + Sync)).collect();
+        let refs: Vec<&(dyn postgres::types::ToSql + Sync)> = params
+            .iter()
+            .map(|b| b.as_ref() as &(dyn postgres::types::ToSql + Sync))
+            .collect();
         if let Err(e) = self.conn.borrow_mut().execute(&sql, &refs) {
             eprintln!("[存储] update_session 失败：{e}");
         }
@@ -134,7 +155,10 @@ impl Store for PgStore {
                     &(item["seq"].as_i64().unwrap_or(0) as i32),
                     &item["title"].as_str().unwrap_or(""),
                     &item["expected"].as_str().unwrap_or(""),
-                    &item.get("status").and_then(|v| v.as_str()).unwrap_or("pending"),
+                    &item
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("pending"),
                 ],
             );
             if let Err(e) = r {
@@ -152,7 +176,9 @@ impl Store for PgStore {
             n += 1;
             if col == "conclusion_entry" {
                 sets.push(format!("{col} = NULLIF(${n}::text,'')::bigint"));
-                params.push(Box::new(v.as_i64().map(|x| x.to_string()).unwrap_or_default()));
+                params.push(Box::new(
+                    v.as_i64().map(|x| x.to_string()).unwrap_or_default(),
+                ));
             } else {
                 sets.push(format!("{col} = ${n}::text"));
                 params.push(Box::new(v.as_str().map(String::from).unwrap_or_default()));
@@ -170,8 +196,10 @@ impl Store for PgStore {
             n,
             n + 1
         );
-        let refs: Vec<&(dyn postgres::types::ToSql + Sync)> =
-            params.iter().map(|b| b.as_ref() as &(dyn postgres::types::ToSql + Sync)).collect();
+        let refs: Vec<&(dyn postgres::types::ToSql + Sync)> = params
+            .iter()
+            .map(|b| b.as_ref() as &(dyn postgres::types::ToSql + Sync))
+            .collect();
         if let Err(e) = self.conn.borrow_mut().execute(&sql, &refs) {
             eprintln!("[存储] update_agenda_item 失败：{e}");
         }
@@ -322,7 +350,11 @@ struct BlackboardClient {
 
 impl BlackboardClient {
     fn new(base_url: &str, token_file: &str) -> Result<Self, String> {
-        let token = if token_file.is_empty() { String::new() } else { read_secret(token_file)? };
+        let token = if token_file.is_empty() {
+            String::new()
+        } else {
+            read_secret(token_file)?
+        };
         Ok(Self {
             base: base_url.trim_end_matches('/').to_string(),
             token,
@@ -345,7 +377,10 @@ impl BlackboardClient {
             Duration::from_secs(HTTP_TIMEOUT_S as u64),
         ) {
             Ok((code, v)) => (code, v),
-            Err(e) => (0, json!({"ok": false, "error": "http_error", "detail": e.0})),
+            Err(e) => (
+                0,
+                json!({"ok": false, "error": "http_error", "detail": e.0}),
+            ),
         }
     }
 }
@@ -412,21 +447,28 @@ struct NatsTransport {
 }
 
 impl NatsTransport {
-    fn new(
-        host: &str,
-        port: u16,
-        user: &str,
-        password_file: &str,
-    ) -> Result<Self, String> {
-        let password = if password_file.is_empty() { String::new() } else { read_secret(password_file)? };
+    fn new(host: &str, port: u16, user: &str, password_file: &str) -> Result<Self, String> {
+        let password = if password_file.is_empty() {
+            String::new()
+        } else {
+            read_secret(password_file)?
+        };
         let cfg = hacs_l1_transport::nats_client::NatsConfig::from_hosts_str(
             &format!("{host}:{port}"),
             port,
         )
         .map_err(|e| format!("NATS 地址解析失败：{e}"))?
         .with_credentials(
-            if user.is_empty() { None } else { Some(user.to_string()) },
-            if password.is_empty() { None } else { Some(password) },
+            if user.is_empty() {
+                None
+            } else {
+                Some(user.to_string())
+            },
+            if password.is_empty() {
+                None
+            } else {
+                Some(password)
+            },
         )
         .with_name("roundtable");
         Ok(Self {
@@ -461,7 +503,8 @@ impl Transport for NatsTransport {
     }
 
     fn ask(&mut self, member: &str, text: &str, timeout: f64) -> (String, String, String) {
-        let envelope = json!({"from": "roundtable", "text": text, "timeout_s": timeout}).to_string();
+        let envelope =
+            json!({"from": "roundtable", "text": text, "timeout_s": timeout}).to_string();
         if !self.connected && self.client.connect().is_err() {
             return ("error".into(), "".into(), "NATS 连接失败".into());
         }
@@ -495,7 +538,11 @@ struct A2ATransport {
 
 impl A2ATransport {
     fn new(endpoints: &[String], token_file: &str) -> Result<Self, String> {
-        let token = if token_file.is_empty() { String::new() } else { read_secret(token_file)? };
+        let token = if token_file.is_empty() {
+            String::new()
+        } else {
+            read_secret(token_file)?
+        };
         let mut map = HashMap::new();
         for item in endpoints {
             let (member, url) = item.split_once('=').unwrap_or(("", ""));
@@ -503,7 +550,10 @@ impl A2ATransport {
                 map.insert(member.trim().to_string(), url.trim().to_string());
             }
         }
-        Ok(Self { endpoints: map, token })
+        Ok(Self {
+            endpoints: map,
+            token,
+        })
     }
 }
 
@@ -513,10 +563,16 @@ impl Transport for A2ATransport {
     }
 
     fn ping(&mut self, member: &str) -> bool {
-        let Some(base) = self.endpoints.get(member) else { return false };
+        let Some(base) = self.endpoints.get(member) else {
+            return false;
+        };
         let url = format!("{}/healthz", base.trim_end_matches('/'));
         matches!(
-            hacs_l1_transport::http_client::get_json(&url, &[], Duration::from_secs_f64(PING_TIMEOUT_S)),
+            hacs_l1_transport::http_client::get_json(
+                &url,
+                &[],
+                Duration::from_secs_f64(PING_TIMEOUT_S)
+            ),
             Ok((200, _))
         )
     }
@@ -642,7 +698,11 @@ fn parse_args() -> Opts {
 }
 
 /// 会前门禁：goal/agenda 缺一不开。返回 (goal, agenda, 缺失清单)。
-fn gate_check(goal: &str, agenda_raw: &[String], resumed: Option<&Value>) -> (String, Vec<Value>, Vec<String>) {
+fn gate_check(
+    goal: &str,
+    agenda_raw: &[String],
+    resumed: Option<&Value>,
+) -> (String, Vec<Value>, Vec<String>) {
     let mut goal = resumed
         .and_then(|r| r["goal"].as_str())
         .filter(|s| !s.trim().is_empty())
@@ -707,7 +767,11 @@ fn main() {
     } else {
         eprintln!(
             "[演练] 未给 --commit：不写黑板、不写 PG（{}）",
-            if args.dry_run { "dry-run 假应答" } else { "真点名" }
+            if args.dry_run {
+                "dry-run 假应答"
+            } else {
+                "真点名"
+            }
         );
         Box::new(NullBlackboard::new(Vec::new()))
     };
@@ -746,7 +810,11 @@ fn main() {
     let members_raw: Vec<String> = resumed
         .as_ref()
         .and_then(|r| r["members"].as_array().cloned())
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_else(|| {
             args.members
                 .split(',')
@@ -775,7 +843,9 @@ fn main() {
     }
 
     // ---- transport
-    let fake = std::env::var("RT_FAKE_REPLY").map(|v| v == "1").unwrap_or(false);
+    let fake = std::env::var("RT_FAKE_REPLY")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     let mut transport: Box<dyn Transport> = if args.dry_run || fake {
         Box::new(hacs_l3_domain::roundtable_sched::DryRunTransport::new(
             HashMap::new(),
@@ -827,7 +897,10 @@ fn main() {
         .map(String::from)
         .or_else(|| args.moderator.clone())
         .unwrap_or_default();
-    let start_round = resumed.as_ref().and_then(|r| r["round_no"].as_i64()).unwrap_or(0);
+    let start_round = resumed
+        .as_ref()
+        .and_then(|r| r["round_no"].as_i64())
+        .unwrap_or(0);
 
     let cfg = RoundtableConfig {
         session_id,
@@ -845,7 +918,10 @@ fn main() {
         agenda,
     };
     if resumed.is_some() {
-        println!("[续跑] {} 从第 {} 轮之后继续", cfg.session_id, cfg.start_round);
+        println!(
+            "[续跑] {} 从第 {} 轮之后继续",
+            cfg.session_id, cfg.start_round
+        );
     }
 
     let mut out_line = |line: &str| println!("{line}");

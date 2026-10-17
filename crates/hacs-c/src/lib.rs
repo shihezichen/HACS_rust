@@ -30,3 +30,6 @@
 
 /// 迁移占位：本 crate 尚未实现（见 README 的迁移路线图）。
 pub const MIGRATION_STATUS: &str = "pending";
+
+/// 中枢侧凭据镜像通道纯逻辑（Python tools/roster_creds_mirror.py 对齐）。
+pub mod creds_mirror;

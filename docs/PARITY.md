@@ -242,3 +242,5 @@
 - 单测 18 个（core 10 + sched 4 + bin 场景 4）：dry-run 全链 converged、缺席 defect 开单、object 阻断 deferred、确认分母口径、actions 三硬口径、prompt 预算夹逼等。
 - 真库 E2E（PG@15432 + blackboard_svc@9940 + RT_FAKE_REPLY）：aborted 路径（真 NATS down：探针无应答→缺席→0<2 中止→defect×2 落库 ✓）；converged 全链（create_session→turns×4→黑板条目→结论条目→确认→actions（due_at=+7d timestamptz）→issues→sessions state=converged/confirmed ✓）。
 - 内存：Python 30,496 kB vs Rust 3,584 kB = **8.5×**（release + /usr/bin/time -v Max RSS）。
+
+52. gen_nats_conf / serve / roster_creds_mirror（C 层 + tools 面三件）：gen_nats_conf 口令只从 creds/<成员>.pass 读、缺件必拒 rc=2、--drop-user 唯一退场、--dry-run 不写盘（与 Python 对齐）；serve 仅开发用静态+反代，/api 错误信封对齐 chat_svc 契约；creds_mirror 纯逻辑（probe/parse_probe/analyze/exit_code）逐条对齐，出口只有 sha256[:12]、口令只走 ssh stdin 绝不进 argv，采集失败绝不退化为 0/1。Rust 侧 ssh 目标表用 env AGENT_TEAM_SSH_TARGETS（Python 为内置真值表）——部署表来源不同，口径一致。RT_FAKE_REPLY 已在 51 登记。
