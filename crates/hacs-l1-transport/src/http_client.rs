@@ -77,6 +77,93 @@ pub fn get(
     parse_response(&raw)
 }
 
+/// 发一次带 JSON 体 + 自定义方法（POST 等）的请求，返回响应。
+/// `headers` 追加在默认头之后（`X-Agent-Id` 等署名走这里）。
+pub fn request_json(
+    url: &str,
+    method: &str,
+    body: Option<&serde_json::Value>,
+    headers: &[(&str, &str)],
+    timeout: Duration,
+) -> Result<(u16, serde_json::Value), HttpError> {
+    let parts = parse_url(url)?;
+    let addr = (parts.host.as_str(), parts.port)
+        .to_socket_addrs()
+        .map_err(|e| HttpError(format!("解析地址失败: {e}")))?
+        .next()
+        .ok_or_else(|| HttpError("无可用地址".to_string()))?;
+    let mut sock = TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|e| HttpError(format!("连不上 {}:{} —— {e}", parts.host, parts.port)))?;
+    sock.set_read_timeout(Some(timeout)).ok();
+    sock.set_write_timeout(Some(timeout)).ok();
+
+    let body_bytes = body.map(|b| b.to_string().into_bytes());
+    let mut req = Vec::new();
+    req.extend_from_slice(
+        format!(
+            "{method} {} HTTP/1.0
+",
+            parts.path
+        )
+        .as_bytes(),
+    );
+    req.extend_from_slice(
+        format!(
+            "Host: {}:{}
+",
+            parts.host, parts.port
+        )
+        .as_bytes(),
+    );
+    req.extend_from_slice(
+        b"Connection: close
+",
+    );
+    for (k, v) in headers {
+        req.extend_from_slice(
+            format!(
+                "{k}: {v}
+"
+            )
+            .as_bytes(),
+        );
+    }
+    if let Some(b) = &body_bytes {
+        req.extend_from_slice(
+            b"Content-Type: application/json
+",
+        );
+        req.extend_from_slice(
+            format!(
+                "Content-Length: {}
+",
+                b.len()
+            )
+            .as_bytes(),
+        );
+    }
+    req.extend_from_slice(
+        b"
+",
+    );
+    if let Some(b) = &body_bytes {
+        req.extend_from_slice(b);
+    }
+    sock.write_all(&req)
+        .map_err(|e| HttpError(format!("发送失败: {e}")))?;
+    sock.flush()
+        .map_err(|e| HttpError(format!("发送失败: {e}")))?;
+
+    let mut raw = Vec::new();
+    sock.read_to_end(&mut raw)
+        .map_err(|e| HttpError(format!("读取失败: {e}")))?;
+    let resp = parse_response(&raw)?;
+    let text = String::from_utf8_lossy(&resp.body);
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .unwrap_or_else(|_| serde_json::json!({"raw": text.to_string()}));
+    Ok((resp.status, value))
+}
+
 /// 发一次 `GET` 并把响应体当 JSON 解析。
 pub fn get_json(
     url: &str,

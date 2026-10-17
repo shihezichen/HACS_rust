@@ -47,7 +47,11 @@ pub fn clean_output(text: &str) -> String {
         return String::new();
     }
     let stripped = strip_ansi(text);
-    stripped.replace("\r\n", "\n").replace('\r', "").trim().to_string()
+    stripped
+        .replace("\r\n", "\n")
+        .replace('\r', "")
+        .trim()
+        .to_string()
 }
 
 /// `ANSI_RE` 的 Rust 版：逐字符扫描，识别 CSI / OSC / 单字符 ESC 三类序列。
@@ -132,7 +136,9 @@ pub fn build_prompt(messages: &Value) -> Option<String> {
     // 从后往前找最后一条「role=user 且 content 是非空白字符串」的消息
     let mut idx: Option<usize> = None;
     for (i, item) in items.iter().enumerate().rev() {
-        let Some(obj) = item.as_object() else { continue };
+        let Some(obj) = item.as_object() else {
+            continue;
+        };
         if obj.get("role").and_then(Value::as_str) != Some("user") {
             continue;
         }
@@ -160,8 +166,12 @@ pub fn build_prompt(messages: &Value) -> Option<String> {
     };
     let mut lines: Vec<String> = Vec::new();
     for item in items.iter().take(idx) {
-        let Some(obj) = item.as_object() else { continue };
-        let Some(content) = obj.get("content").and_then(Value::as_str) else { continue };
+        let Some(obj) = item.as_object() else {
+            continue;
+        };
+        let Some(content) = obj.get("content").and_then(Value::as_str) else {
+            continue;
+        };
         if content.trim().is_empty() {
             continue;
         }
@@ -171,7 +181,11 @@ pub fn build_prompt(messages: &Value) -> Option<String> {
     if lines.is_empty() {
         return Some(task);
     }
-    Some(format!("[上下文]\n{}\n[/上下文]\n\n{}", lines.join("\n"), task))
+    Some(format!(
+        "[上下文]\n{}\n[/上下文]\n\n{}",
+        lines.join("\n"),
+        task
+    ))
 }
 
 // ---------------------------------------------------------------- 模型解析
@@ -204,7 +218,13 @@ pub fn safe_session_id(raw: &str) -> String {
     let mut cleaned: String = raw
         .trim()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     cleaned.truncate(64);
     let cleaned = cleaned.trim_matches('-');
@@ -219,10 +239,17 @@ pub fn safe_session_id(raw: &str) -> String {
 pub fn claude_session_uuid(raw: &str) -> String {
     // uuid.NAMESPACE_URL = 6ba7b811-9dad-11d1-80b4-00c04fd430c8（RFC 4122 附录 C 的固定值）
     let mut ns_url = [0u8; 16];
-    for (i, b) in "6ba7b8119dad11d180b400c04fd430c8".as_bytes().chunks(2).enumerate() {
+    for (i, b) in "6ba7b8119dad11d180b400c04fd430c8"
+        .as_bytes()
+        .chunks(2)
+        .enumerate()
+    {
         ns_url[i] = u8::from_str_radix(std::str::from_utf8(b).unwrap(), 16).unwrap();
     }
-    let digest = uuid5_bytes(&ns_url, format!("cli_backend/claude/{}", raw.trim()).as_bytes());
+    let digest = uuid5_bytes(
+        &ns_url,
+        format!("cli_backend/claude/{}", raw.trim()).as_bytes(),
+    );
     format_uuid(digest)
 }
 
@@ -253,7 +280,7 @@ fn format_uuid(b: [u8; 16]) -> String {
 }
 
 /// SHA-1（FIPS 180-1，自实现避免引依赖；uuid5 是它在本仓的唯一用途）。
-fn sha1(data: &[u8]) -> [u8; 20] {
+pub fn sha1(data: &[u8]) -> [u8; 20] {
     let mut h: [u32; 5] = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
 
     // 消息填充：补 0x80、补 0 直到 ≡56 (mod 64)，再补 8 字节大端位长
@@ -444,10 +471,7 @@ pub fn save_codex_sessions(mapping: &HashMap<String, String>, path: &str) -> boo
     if std::fs::create_dir_all(&dir).is_err() {
         return false;
     }
-    let tmp = dir.join(format!(
-        ".codex_sessions_{}.tmp",
-        std::process::id()
-    ));
+    let tmp = dir.join(format!(".codex_sessions_{}.tmp", std::process::id()));
     if std::fs::write(&tmp, out.as_bytes()).is_err() {
         return false;
     }
@@ -483,7 +507,11 @@ fn json_escape(s: &str) -> String {
 
 /// 日志里只留任务前 40 字（单行），不记全文。
 pub fn task_head(prompt: &str) -> String {
-    prompt.replace('\n', " ").chars().take(TASK_LOG_MAX).collect()
+    prompt
+        .replace('\n', " ")
+        .chars()
+        .take(TASK_LOG_MAX)
+        .collect()
 }
 
 /// 超时夹取：`max(1.0, min(timeout_s, MAX_TIMEOUT_S))`；解析失败回默认值。
@@ -513,7 +541,10 @@ mod tests {
 
     #[test]
     fn clean_output_strips_ansi_and_cr() {
-        assert_eq!(clean_output("\x1b[32m[假CLI:pi]\x1b[0m hi\r\n"), "[假CLI:pi] hi");
+        assert_eq!(
+            clean_output("\x1b[32m[假CLI:pi]\x1b[0m hi\r\n"),
+            "[假CLI:pi] hi"
+        );
         assert_eq!(clean_output("\x1b]0;title\x07body"), "body");
         // Python 同口径：strip() 不剥 \x07（非空白）
         assert_eq!(clean_output("\x1b]8;;u\x1b\\t\x07"), "t\u{7}");
@@ -547,8 +578,14 @@ mod tests {
 
     #[test]
     fn resolve_model_prefixes() {
-        assert_eq!(resolve_model("pi/default").unwrap(), ("piagent".into(), "".into()));
-        assert_eq!(resolve_model("claude/default").unwrap(), ("claudecode".into(), "".into()));
+        assert_eq!(
+            resolve_model("pi/default").unwrap(),
+            ("piagent".into(), "".into())
+        );
+        assert_eq!(
+            resolve_model("claude/default").unwrap(),
+            ("claudecode".into(), "".into())
+        );
         assert_eq!(resolve_model("codex").unwrap(), ("codex".into(), "".into()));
         assert_eq!(
             resolve_model("codex/gpt-5-codex").unwrap(),
@@ -606,14 +643,20 @@ mod tests {
     #[test]
     fn codex_sessions_roundtrip() {
         let mut m = HashMap::new();
-        m.insert("k1".to_string(), "11111111-2222-3333-4444-555555555555".to_string());
+        m.insert(
+            "k1".to_string(),
+            "11111111-2222-3333-4444-555555555555".to_string(),
+        );
         m.insert("中文键".to_string(), "sid-2".to_string());
         let dir = std::env::temp_dir().join(format!("hacs_cb_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("sessions.json");
         assert!(save_codex_sessions(&m, path.to_str().unwrap()));
         let back = load_codex_sessions(path.to_str().unwrap());
-        assert_eq!(back.get("k1").unwrap(), "11111111-2222-3333-4444-555555555555");
+        assert_eq!(
+            back.get("k1").unwrap(),
+            "11111111-2222-3333-4444-555555555555"
+        );
         assert_eq!(back.get("中文键").unwrap(), "sid-2");
         // 裸形态兼容
         std::fs::write(&path, r#"{"k3": "bare-sid"}"#).unwrap();
@@ -632,7 +675,10 @@ mod tests {
         assert!(reg.claude_seen_or_add("u1"));
         assert_eq!(reg.codex_setdefault("s1", "a"), "a");
         assert_eq!(reg.codex_setdefault("s1", "b"), "a"); // 只首次写入
-        reg.codex_merge(HashMap::from([("s1".into(), "z".into()), ("s2".into(), "y".into())]));
+        reg.codex_merge(HashMap::from([
+            ("s1".into(), "z".into()),
+            ("s2".into(), "y".into()),
+        ]));
         assert_eq!(reg.codex_get("s1").unwrap(), "a"); // 不覆盖内存
         assert_eq!(reg.codex_get("s2").unwrap(), "y");
     }

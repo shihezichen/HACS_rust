@@ -46,8 +46,17 @@ pub const DEFAULT_WORKERS: usize = 8;
 pub const DEFAULT_PER_MEMBER_LIMIT: usize = 2;
 
 pub const COUNTER_KEYS: &[&str] = &[
-    "rx_requests", "ok", "errors", "timeouts", "hb_sent", "reconnects",
-    "bad_requests", "hb_failed", "busy_rejected", "inbox_replayed", "inbox_errors",
+    "rx_requests",
+    "ok",
+    "errors",
+    "timeouts",
+    "hb_sent",
+    "reconnects",
+    "bad_requests",
+    "hb_failed",
+    "busy_rejected",
+    "inbox_replayed",
+    "inbox_errors",
 ];
 
 /// 成员名规则：字母数字 `._-`（与 Python `_MEMBER_RE` 同口径）。
@@ -179,8 +188,7 @@ pub fn parse_member_kv(entries: &[String]) -> (HashMap<String, String>, Vec<Stri
 /// 两者都缺省时的平台默认口令文件路径。
 pub fn default_password_path(member: &str) -> String {
     if cfg!(windows) {
-        let base = np::env_stripped("AGENT_TEAM_NATS_DIR")
-            .unwrap_or_else(|| np::runtime_dir(None));
+        let base = np::env_stripped("AGENT_TEAM_NATS_DIR").unwrap_or_else(|| np::runtime_dir(None));
         return format!("{base}\\nats-{member}.pass");
     }
     format!("{}/{}.pass", np::nats_dir(None), member)
@@ -311,7 +319,9 @@ pub fn err_envelope(kind: &str, detail: &str, status: Option<u16>) -> Value {
 
 /// 请求载荷校验 + 解析（对应 `handle_request` 的前半段，纯函数供单测）。
 /// 返回 `(text, caller, session_id, timeout_s)` 或错误信封。
-pub fn parse_request_payload(payload: &[u8]) -> Result<(String, String, Option<String>, f64), Value> {
+pub fn parse_request_payload(
+    payload: &[u8],
+) -> Result<(String, String, Option<String>, f64), Value> {
     if payload.len() > MAX_PAYLOAD_BYTES {
         return Err(err_envelope(
             "bad_request",
@@ -472,7 +482,10 @@ mod tests {
             "bad member=x".to_string(),
         ]);
         assert_eq!(keyed.get("lobster").unwrap(), "nats-lobster");
-        assert_eq!(unkeyed, vec!["plain-pass".to_string(), "bad member=x".to_string()]);
+        assert_eq!(
+            unkeyed,
+            vec!["plain-pass".to_string(), "bad member=x".to_string()]
+        );
     }
 
     #[test]
@@ -485,7 +498,10 @@ mod tests {
         let err = resolve_member_creds(
             &members,
             &["a=ua".to_string(), "b=ub".to_string()],
-            &["a=/no/such/a.pass".to_string(), "b=/no/such/b.pass".to_string()],
+            &[
+                "a=/no/such/a.pass".to_string(),
+                "b=/no/such/b.pass".to_string(),
+            ],
         )
         .unwrap_err();
         assert_eq!(err.len(), 2);
@@ -515,9 +531,9 @@ mod tests {
         let err = parse_request_payload(br#"[1,2]"#).unwrap_err();
         assert_eq!(err["error"], "bad_request");
         // 正常：timeout_s 被硬墙夹住
-        let payload = r#"{"text":"你好","from":"bob","session_id":"s1","timeout_s":500}"#.to_string();
-        let (text, caller, session, timeout) =
-            parse_request_payload(payload.as_bytes()).unwrap();
+        let payload =
+            r#"{"text":"你好","from":"bob","session_id":"s1","timeout_s":500}"#.to_string();
+        let (text, caller, session, timeout) = parse_request_payload(payload.as_bytes()).unwrap();
         assert_eq!(text, "你好");
         assert_eq!(caller, "bob");
         assert_eq!(session.as_deref(), Some("s1"));
@@ -592,6 +608,10 @@ mod tests {
     #[test]
     fn log_event_smoke() {
         // 只验证不 panic；输出人类可读
-        log_event("req.done", Some("lobster"), &[("elapsed_ms", json!(12.3456))]);
+        log_event(
+            "req.done",
+            Some("lobster"),
+            &[("elapsed_ms", json!(12.3456))],
+        );
     }
 }

@@ -20,3 +20,4 @@ pub mod blackboard_view;
 pub mod chat_svc;
 pub mod task_svc;
 pub mod task_svc_chat;
+pub mod team_group;

@@ -50,7 +50,8 @@ pub const CTX_COMPACT_PROMPT: &str =
 
 /// 交接摘要注入（摘要文本嵌进模板）。
 pub fn ctx_handoff_prompt(summary: &str) -> String {
-    let tpl: &str = "【新会话接力／自动注入】上一个会话上下文已满，已切换到这个新会话继续同一任务。\
+    let tpl: &str =
+        "【新会话接力／自动注入】上一个会话上下文已满，已切换到这个新会话继续同一任务。\
 以下是从上一会话带过来的交接摘要，请据此**接着干**（不要从头重做已完成的步骤）：\n\
 ---- 交接摘要开始 ----\nSLOT_SUMMARY\n---- 交接摘要结束 ----\n\
 请继续执行未完成的动作；全部做完时在最后单独一行写 DONE，卡死则写 BLOCKED。";
@@ -103,9 +104,10 @@ pub fn loop_enabled(agent: &Value) -> bool {
     match agent.get("task_loop") {
         None | Some(Value::Null) => true,
         Some(Value::Bool(b)) => *b,
-        Some(Value::String(s)) => {
-            !matches!(s.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off" | "no" | "")
-        }
+        Some(Value::String(s)) => !matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "off" | "no" | ""
+        ),
         Some(_) => true,
     }
 }
@@ -120,7 +122,11 @@ pub fn effective_timeout(agent: &Value, timeout_s: f64) -> f64 {
 
 /// 会话键：`a2a:<caller>:<session_id>`（进 OpenAI `user` 字段）。
 pub fn session_user_field(caller: &str, session_id: &str) -> String {
-    format!("a2a:{}:{}", if caller.is_empty() { "unknown" } else { caller }, session_id)
+    format!(
+        "a2a:{}:{}",
+        if caller.is_empty() { "unknown" } else { caller },
+        session_id
+    )
 }
 
 // ---------------------------------------------------------------- 配置文件
@@ -130,9 +136,7 @@ pub fn session_user_field(caller: &str, session_id: &str) -> String {
 pub fn load_config(text: &str) -> Result<(String, Value, String, Option<i64>), String> {
     let cfg: Value =
         serde_json::from_str(text).map_err(|e| format!("agents.json 不是合法 JSON: {e}"))?;
-    let obj = cfg
-        .as_object()
-        .ok_or("agents.json 顶层必须是对象")?;
+    let obj = cfg.as_object().ok_or("agents.json 顶层必须是对象")?;
     let node_id = obj
         .get("node_id")
         .and_then(Value::as_str)
@@ -461,7 +465,10 @@ mod tests {
         assert_eq!(auth_peer(Some("Basic x"), &peers, false), None);
         assert_eq!(auth_peer(Some("Bearer "), &peers, false), None);
         assert_eq!(auth_peer(None, &peers, false), None);
-        assert_eq!(auth_peer(Some("Bearer anything"), &peers, true), Some("anonymous".to_string()));
+        assert_eq!(
+            auth_peer(Some("Bearer anything"), &peers, true),
+            Some("anonymous".to_string())
+        );
     }
 
     #[test]
@@ -494,7 +501,10 @@ mod tests {
         let agent = json!({"max_timeout_s": 60});
         assert_eq!(effective_timeout(&agent, 120.0), 60.0);
         assert_eq!(effective_timeout(&agent, 30.0), 30.0);
-        assert_eq!(effective_timeout(&json!({"max_timeout_s": -1}), 120.0), 120.0);
+        assert_eq!(
+            effective_timeout(&json!({"max_timeout_s": -1}), 120.0),
+            120.0
+        );
         assert_eq!(effective_timeout(&json!({}), 120.0), 120.0);
     }
 
@@ -536,8 +546,9 @@ mod tests {
 
     #[test]
     fn message_body_parsing() {
-        let ok = parse_message_body(&json!({"text": "你好", "timeout_s": 30, "session_id": " s1 "}))
-            .unwrap();
+        let ok =
+            parse_message_body(&json!({"text": "你好", "timeout_s": 30, "session_id": " s1 "}))
+                .unwrap();
         assert_eq!(ok.text, "你好");
         assert_eq!(ok.timeout_s, 30.0);
         assert_eq!(ok.session_id.as_deref(), Some("s1"));
@@ -546,7 +557,10 @@ mod tests {
         let ok = parse_message_body(&json!({"text": "t", "session_id": long})).unwrap();
         assert_eq!(ok.session_id.unwrap().len(), SESSION_ID_MAX);
         // 空 text → 400
-        assert_eq!(parse_message_body(&json!({"text": "  "})).unwrap_err().0, 400);
+        assert_eq!(
+            parse_message_body(&json!({"text": "  "})).unwrap_err().0,
+            400
+        );
         assert_eq!(parse_message_body(&json!({})).unwrap_err().0, 400);
         // timeout 非法 → 400；<=0 → 默认
         assert_eq!(

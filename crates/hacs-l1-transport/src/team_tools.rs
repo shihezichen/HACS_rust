@@ -155,12 +155,21 @@ impl MemberOutcome {
         } else {
             rep
         };
-        format!("  {mark} {:<12} {:>6.1}s  {}", self.member, self.elapsed, rep)
+        format!(
+            "  {mark} {:<12} {:>6.1}s  {}",
+            self.member, self.elapsed, rep
+        )
     }
 }
 
 /// 群发汇总 JSON（`--json` / `--out` 的输出形状）。
-pub fn broadcast_summary(subject: &str, results: &[MemberOutcome], total: usize, no_wait: bool, elapsed: f64) -> Value {
+pub fn broadcast_summary(
+    subject: &str,
+    results: &[MemberOutcome],
+    total: usize,
+    no_wait: bool,
+    elapsed: f64,
+) -> Value {
     let ok = results.iter().filter(|r| r.ok).count();
     json!({
         "subject": subject,
@@ -286,8 +295,20 @@ mod tests {
     #[test]
     fn broadcast_summary_counts() {
         let results = vec![
-            MemberOutcome { member: "a".into(), ok: true, reply: Some("r".into()), error: None, elapsed: 1.0 },
-            MemberOutcome { member: "b".into(), ok: false, reply: None, error: Some("e".into()), elapsed: 2.0 },
+            MemberOutcome {
+                member: "a".into(),
+                ok: true,
+                reply: Some("r".into()),
+                error: None,
+                elapsed: 1.0,
+            },
+            MemberOutcome {
+                member: "b".into(),
+                ok: false,
+                reply: None,
+                error: Some("e".into()),
+                elapsed: 2.0,
+            },
         ];
         let s = broadcast_summary("群发", &results, 2, false, 3.0);
         assert_eq!(s["ok"], 1);
