@@ -238,6 +238,7 @@ dependencies = [
 name = "hacs-l0-host"
 version = "0.1.0"
 dependencies = [
+ "hacs-x-identity",
  "rusqlite",
  "serde_json",
 ]

@@ -17,3 +17,4 @@
 pub mod member_roster;
 pub mod node_paths;
 pub mod node_profile;
+pub mod nodelet;

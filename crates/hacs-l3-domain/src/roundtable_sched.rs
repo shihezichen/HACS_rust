@@ -12,7 +12,8 @@ fn json_of<T: Into<Value>>(v: Option<T>) -> Value {
 
 pub const DEFAULT_TOPIC: &str = "roundtable";
 pub const OUTPUT_CONTRACT: &str = "只回一个 JSON 对象，前后不要任何多余文字（可以用 ```json 包起来）：\n{\"kind\":\"opinion\",\"content\":\"你的观点，200 字以内\",\"stance\":\"support|oppose|neutral|need_info\",\"vote\":\"continue|converge\",\"confidence\":0.0,\"refs\":[{\"type\":\"entry\",\"value\":12}]}\nrefs 必须至少一条，type 取 entry（上面片段的 # 号）/ file（文件路径）/ measurement（实测数据）——**refs 为空的发言不会被记录**。\nvote=converge 表示你认为讨论已经够了，continue 表示还需要再谈一轮。";
-pub const RETRY_HINT: &str = "\n\n【上一次回复不合格】原因：%s。请**只**输出一个 JSON 对象，且 refs 至少一条。";
+pub const RETRY_HINT: &str =
+    "\n\n【上一次回复不合格】原因：%s。请**只**输出一个 JSON 对象，且 refs 至少一条。";
 pub const CONFIRM_CONTRACT: &str = "只回一个 JSON 对象，前后不要任何多余文字：\n{\"verdict\":\"agree|object|abstain\",\"note\":\"一句话理由（反对必须写清反对什么）\"}\nagree=当场确认这条结论；object=不同意，该项会被记为未确认并进遗留问题；abstain=弃权。**解析不出来一律按 abstain 处理，不会替你点头。**";
 pub const OVERALL_CONTRACT: &str = "\n【输出契约】只回一个 JSON 对象：\n{\"kind\":\"decision\",\"content\":\"总体结论 + 依据 + 还有什么没定\",\"stance\":\"neutral\",\"vote\":\"converge\",\"confidence\":0.0,\"refs\":[{\"type\":\"entry\",\"value\":12}],\"actions\":[{\"what\":\"要做的事\",\"owner\":\"成员名\",\"due_at\":\"2026-01-31T18:00:00+08:00\",\"agenda_seq\":1}],\"issues\":[{\"title\":\"还没定的事\",\"owner\":\"成员名\",\"detail\":\"为什么没定\"}]}\nactions **至少一条**，且每条都要满足：owner 必须是下面【本场成员】里的名字（不许写\"全体\"\"大家\"\"待定\"），due_at 必须是 ISO8601 且晚于现在。\nrefs 必须至少一条。content 里要写清：结论是什么、基于哪几条证据、还有什么没定。";
 pub const ITEM_CONTRACT: &str = "\n【输出契约】只回一个 JSON 对象：\n{\"kind\":\"decision\",\"content\":\"本议程项的结论 + 依据\",\"stance\":\"neutral\",\"vote\":\"converge\",\"confidence\":0.0,\"refs\":[{\"type\":\"entry\",\"value\":12}]}\ncontent 只写**当前这一项**的结论，不要提前下别项的结论；refs 至少一条。";
@@ -182,7 +183,11 @@ impl Store for NullStore {
         }
     }
     fn add_confirmation(&mut self, row: &Value) -> Option<i64> {
-        Some(Self::append_aux(&mut self.confirmations, &mut self.next_aux, row))
+        Some(Self::append_aux(
+            &mut self.confirmations,
+            &mut self.next_aux,
+            row,
+        ))
     }
     fn add_action(&mut self, row: &Value) -> Option<i64> {
         Some(Self::append_aux(&mut self.actions, &mut self.next_aux, row))
@@ -221,7 +226,11 @@ impl Default for NullBlackboard {
 
 impl NullBlackboard {
     pub fn new(seed: Vec<Value>) -> Self {
-        Self { posted: Vec::new(), entries: seed, next: -1 }
+        Self {
+            posted: Vec::new(),
+            entries: seed,
+            next: -1,
+        }
     }
 }
 
@@ -325,7 +334,13 @@ impl DryRunTransport {
         let verdict = self
             .verdicts
             .get_mut(member)
-            .and_then(|q| if q.is_empty() { None } else { Some(q.remove(0)) })
+            .and_then(|q| {
+                if q.is_empty() {
+                    None
+                } else {
+                    Some(q.remove(0))
+                }
+            })
             .unwrap_or_else(|| "agree".into());
         json!({"verdict": verdict, "note": format!("（dry-run）{} 的当场表态", member)}).to_string()
     }
@@ -335,7 +350,11 @@ impl DryRunTransport {
             return self.overall.remove(0);
         }
         let roster = Self::roster_from_prompt(text);
-        let roster = if roster.is_empty() { vec![member.to_string()] } else { roster };
+        let roster = if roster.is_empty() {
+            vec![member.to_string()]
+        } else {
+            roster
+        };
         let due_epoch = now_epoch_f() as i64 + self.due_days.max(1) * 86400;
         json!({
             "kind": "decision",
@@ -371,7 +390,11 @@ impl Transport for DryRunTransport {
     fn ask(&mut self, member: &str, text: &str, _timeout: f64) -> AskResult {
         self.asked.push((member.to_string(), text.to_string()));
         if self.offline.contains(member) {
-            return ("absent".into(), "".to_string(), "dry-run：该成员被标记为离线".into());
+            return (
+                "absent".into(),
+                "".to_string(),
+                "dry-run：该成员被标记为离线".into(),
+            );
         }
         if text.contains("【确认契约】") {
             return ("ok".into(), self.canned_confirm(member), "".into());
@@ -410,7 +433,11 @@ pub fn unwrap_reply(raw: &str) -> AskResult {
     }
     if obj["ok"].as_bool().unwrap_or(false) {
         if !obj["reply"].is_null() {
-            return ("ok".into(), obj["reply"].as_str().unwrap_or("").to_string(), "".into());
+            return (
+                "ok".into(),
+                obj["reply"].as_str().unwrap_or("").to_string(),
+                "".into(),
+            );
         }
         return ("ok".into(), text.to_string(), "".into());
     }
@@ -483,8 +510,15 @@ pub fn render_prompt(
         }
         parts.push(format!("问题：{question}"));
         if !agenda_rows.is_empty() {
-            parts.push(format!("【议程】（共 {} 项，▶ 是当前这一项）", agenda.len()));
-            parts.extend(render_agenda_block(agenda_rows, current_seq, AGENDA_TITLE_CHARS));
+            parts.push(format!(
+                "【议程】（共 {} 项，▶ 是当前这一项）",
+                agenda.len()
+            ));
+            parts.extend(render_agenda_block(
+                agenda_rows,
+                current_seq,
+                AGENDA_TITLE_CHARS,
+            ));
         }
         if let Some(c) = current {
             parts.push(format!(
@@ -498,17 +532,23 @@ pub fn render_prompt(
                 one_line(c["expected"].as_str().unwrap_or(""), 200)
             ));
         }
-        parts.push(format!("当前第 {round_no} 轮（本项最多 {max_rounds} 轮）。"));
+        parts.push(format!(
+            "当前第 {round_no} 轮（本项最多 {max_rounds} 轮）。"
+        ));
         format!("{}\n", parts.join("\n"))
     };
 
     let mut tail = format!("\n【输出契约】\n{OUTPUT_CONTRACT}");
     if !retry_reason.is_empty() {
-        tail += &format!("\n\n【上一次回复不合格】原因：{}。请**只**输出一个 JSON 对象，且 refs 至少一条。", one_line(retry_reason, 120));
+        tail += &format!(
+            "\n\n【上一次回复不合格】原因：{}。请**只**输出一个 JSON 对象，且 refs 至少一条。",
+            one_line(retry_reason, 120)
+        );
     }
 
     let mut rows: Vec<Value> = agenda.to_vec();
     let mut picked: Vec<Value> = snippets.iter().take(SNIPPET_MAX).cloned().collect();
+    #[allow(unused_assignments)]
     let mut body = String::new();
     loop {
         if !picked.is_empty() {
@@ -516,10 +556,15 @@ pub fn render_prompt(
             for s in &picked {
                 lines.push(format!(
                     "[#{} {}/{}] {}",
-                    s.get("entry_id").map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                    s.get("entry_id")
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "?".into()),
                     s.get("author").and_then(|v| v.as_str()).unwrap_or("?"),
                     s.get("kind").and_then(|v| v.as_str()).unwrap_or("?"),
-                    one_line(s.get("content").and_then(|v| v.as_str()).unwrap_or(""), SNIPPET_CHARS)
+                    one_line(
+                        s.get("content").and_then(|v| v.as_str()).unwrap_or(""),
+                        SNIPPET_CHARS
+                    )
                 ));
             }
             body = format!("{}\n", lines.join("\n"));
@@ -566,56 +611,57 @@ pub fn render_conclusion_prompt(
     now_text: &str,
     retry_reason: &str,
 ) -> (String, usize) {
-    let build_head = |agenda_rows: &[Value]| -> String {
-        let mut parts: Vec<String> = vec!["你是本场圆桌会议的主持人。".into(), format!("议题：{topic}")];
-        if !goal.is_empty() {
-            parts.push(format!("【会议目标】{}", one_line(goal, 300)));
-        }
-        parts.push(format!("问题：{question}"));
-        if !agenda_rows.is_empty() {
-            parts.push(format!("【议程】（共 {} 项）", agenda.len()));
-            parts.extend(render_agenda_block(
-                agenda_rows,
-                item.and_then(|i| i["seq"].as_i64()),
-                AGENDA_TITLE_CHARS,
-            ));
-        }
-        if let Some(it) = item {
-            parts.push(format!(
-                "【现在只为第 {} 项出结论】{}",
-                it["seq"],
-                one_line(it["title"].as_str().unwrap_or(""), 200)
-            ));
-            parts.push(format!(
-                "【该项预期产出】{}",
-                one_line(it["expected"].as_str().unwrap_or(""), 200)
-            ));
-        } else {
-            for res in item_results {
-                parts.push(format!(
-                    "[第 {} 项 {}] {}",
-                    res["seq"],
-                    res["status"],
-                    one_line(
-                        res["conclusion"].as_str().unwrap_or("（无结论）"),
-                        160
-                    )
+    let build_head =
+        |agenda_rows: &[Value]| -> String {
+            let mut parts: Vec<String> = vec![
+                "你是本场圆桌会议的主持人。".into(),
+                format!("议题：{topic}"),
+            ];
+            if !goal.is_empty() {
+                parts.push(format!("【会议目标】{}", one_line(goal, 300)));
+            }
+            parts.push(format!("问题：{question}"));
+            if !agenda_rows.is_empty() {
+                parts.push(format!("【议程】（共 {} 项）", agenda.len()));
+                parts.extend(render_agenda_block(
+                    agenda_rows,
+                    item.and_then(|i| i["seq"].as_i64()),
+                    AGENDA_TITLE_CHARS,
                 ));
             }
-        }
-        let tally_of = |k: &str| tally.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
-        parts.push(format!(
+            if let Some(it) = item {
+                parts.push(format!(
+                    "【现在只为第 {} 项出结论】{}",
+                    it["seq"],
+                    one_line(it["title"].as_str().unwrap_or(""), 200)
+                ));
+                parts.push(format!(
+                    "【该项预期产出】{}",
+                    one_line(it["expected"].as_str().unwrap_or(""), 200)
+                ));
+            } else {
+                for res in item_results {
+                    parts.push(format!(
+                        "[第 {} 项 {}] {}",
+                        res["seq"],
+                        res["status"],
+                        one_line(res["conclusion"].as_str().unwrap_or("（无结论）"), 160)
+                    ));
+                }
+            }
+            let tally_of = |k: &str| tally.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
+            parts.push(format!(
             "本项/本场共进行了 {rounds} 轮，立场统计：支持 {} / 反对 {} / 中立 {} / 待资料 {}。",
             tally_of("support"), tally_of("oppose"), tally_of("neutral"), tally_of("need_info")
         ));
-        if item.is_none() {
-            parts.push(format!("【本场成员】{}", roster.join(",")));
-            if !now_text.is_empty() {
-                parts.push(format!("【当前时间】{now_text}（due_at 必须晚于它）"));
+            if item.is_none() {
+                parts.push(format!("【本场成员】{}", roster.join(",")));
+                if !now_text.is_empty() {
+                    parts.push(format!("【当前时间】{now_text}（due_at 必须晚于它）"));
+                }
             }
-        }
-        format!("{}\n", parts.join("\n"))
-    };
+            format!("{}\n", parts.join("\n"))
+        };
 
     let mut tail = if item.is_some() {
         ITEM_CONTRACT.to_string()
@@ -631,6 +677,7 @@ pub fn render_conclusion_prompt(
 
     let mut rows: Vec<Value> = agenda.to_vec();
     let mut picked: Vec<Value> = snippets.iter().take(SNIPPET_MAX).cloned().collect();
+    #[allow(unused_assignments)]
     let mut body = String::new();
     loop {
         if !picked.is_empty() {
@@ -638,9 +685,14 @@ pub fn render_conclusion_prompt(
             for s in &picked {
                 lines.push(format!(
                     "[#{} {}] {}",
-                    s.get("entry_id").map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                    s.get("entry_id")
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "?".into()),
                     s.get("author").and_then(|v| v.as_str()).unwrap_or("?"),
-                    one_line(s.get("content").and_then(|v| v.as_str()).unwrap_or(""), SNIPPET_CHARS)
+                    one_line(
+                        s.get("content").and_then(|v| v.as_str()).unwrap_or(""),
+                        SNIPPET_CHARS
+                    )
                 ));
             }
             body = format!("{}\n", lines.join("\n"));
@@ -765,10 +817,7 @@ pub struct Roundtable<'a> {
 
 impl<'a> Roundtable<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        cfg: RoundtableConfig,
-        out: &'a mut dyn FnMut(&str),
-    ) -> Self {
+    pub fn new(cfg: RoundtableConfig, out: &'a mut dyn FnMut(&str)) -> Self {
         let mut agenda = cfg.agenda;
         if agenda.is_empty() {
             agenda = vec![json!({
@@ -776,10 +825,7 @@ impl<'a> Roundtable<'a> {
                 "expected": "给出该问题的明确结论"
             })];
         }
-        let agenda_seqs: Vec<i64> = agenda
-            .iter()
-            .filter_map(|i| i["seq"].as_i64())
-            .collect();
+        let agenda_seqs: Vec<i64> = agenda.iter().filter_map(|i| i["seq"].as_i64()).collect();
         let budget_chars = (cfg.members.len() as i64)
             * cfg.max_rounds
             * (agenda.len() as i64)
@@ -796,7 +842,11 @@ impl<'a> Roundtable<'a> {
             max_total_rounds: cfg.max_total_rounds,
             deadline_s: cfg.deadline_s,
             max_chars: cfg.max_chars,
-            moderator: if cfg.moderator.is_empty() { default_moderator() } else { cfg.moderator },
+            moderator: if cfg.moderator.is_empty() {
+                default_moderator()
+            } else {
+                cfg.moderator
+            },
             goal: cfg.goal.trim().to_string(),
             agenda,
             agenda_seqs,
@@ -836,8 +886,14 @@ impl<'a> Roundtable<'a> {
     }
 
     fn log_prompt(&mut self, member: &str, prompt: &str) {
-        let Some(path) = self.prompt_log.clone() else { return };
-        match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let Some(path) = self.prompt_log.clone() else {
+            return;
+        };
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
             Ok(f) => {
                 use std::io::Write;
                 let mut f = f;
@@ -851,7 +907,10 @@ impl<'a> Roundtable<'a> {
                     prompt
                 );
             }
-            Err(e) => self.say(&format!("[warn] prompt 日志写不动（{}），继续跑", truncate(&e.to_string(), 120))),
+            Err(e) => self.say(&format!(
+                "[warn] prompt 日志写不动（{}），继续跑",
+                truncate(&e.to_string(), 120)
+            )),
         }
     }
 
@@ -882,7 +941,14 @@ impl<'a> Roundtable<'a> {
         if let Some(o) = entry.as_object_mut() {
             o["count"] = json!(o["count"].as_i64().unwrap_or(0) + 1);
             o["where"].as_array_mut().unwrap().push(json!(where_));
-            let text = one_line(if reason.is_empty() { "点名无应答" } else { reason }, 120);
+            let text = one_line(
+                if reason.is_empty() {
+                    "点名无应答"
+                } else {
+                    reason
+                },
+                120,
+            );
             let reasons = o["reasons"].as_array_mut().unwrap();
             if !reasons.iter().any(|r| r == &json!(text)) {
                 reasons.push(json!(text));
@@ -892,10 +958,16 @@ impl<'a> Roundtable<'a> {
 
     pub fn attendance(&self) -> Value {
         let expected = self.members.len() as i64;
-        let present_members: Vec<&String> =
-            self.members.iter().filter(|m| self.responded.contains(m.as_str())).collect();
-        let absent_members: Vec<&String> =
-            self.members.iter().filter(|m| !self.responded.contains(m.as_str())).collect();
+        let present_members: Vec<&String> = self
+            .members
+            .iter()
+            .filter(|m| self.responded.contains(m.as_str()))
+            .collect();
+        let absent_members: Vec<&String> = self
+            .members
+            .iter()
+            .filter(|m| !self.responded.contains(m.as_str()))
+            .collect();
         let rate = if expected > 0 {
             json!(present_members.len() as f64 / expected as f64)
         } else {
@@ -925,7 +997,11 @@ impl<'a> Roundtable<'a> {
         );
         let missing: Vec<String> = att["absent_members"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         if !missing.is_empty() {
             text += &format!(" 缺席[{}]", missing.join(","));
@@ -940,17 +1016,31 @@ impl<'a> Roundtable<'a> {
         self.defects_opened = true;
         let due_epoch = now_epoch_f() as i64 + DEFECT_DUE_HOURS * 3600;
         for member in self.members.clone() {
-            let Some(log) = self.absent_log.get(&member).cloned() else { continue };
+            let Some(log) = self.absent_log.get(&member).cloned() else {
+                continue;
+            };
             let count = log["count"].as_i64().unwrap_or(0);
             let reasons: Vec<String> = log["reasons"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let wheres: Vec<String> = log["where"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let reason = if reasons.is_empty() { "点名无应答".to_string() } else { reasons.join("；") };
+            let reason = if reasons.is_empty() {
+                "点名无应答".to_string()
+            } else {
+                reasons.join("；")
+            };
             let evidence = json!([{
                 "session_id": self.session_id,
                 "round_no": log["round_no"],
@@ -1005,7 +1095,7 @@ impl<'a> Roundtable<'a> {
     #[allow(clippy::too_many_arguments)]
     fn record_issue(
         &mut self,
-        store: &mut dyn Store,
+        _store: &mut dyn Store,
         title: &str,
         detail: &str,
         owner: Option<&str>,
@@ -1106,9 +1196,18 @@ impl<'a> Roundtable<'a> {
                 res["seq"],
                 res["title"],
                 res["status"],
-                res["confirm"]["agree"].as_array().map(|a| a.len()).unwrap_or(0),
-                res["confirm"]["object"].as_array().map(|a| a.len()).unwrap_or(0),
-                res["entry_id"].as_i64().map(|v| v.to_string()).unwrap_or_else(|| "-".into()),
+                res["confirm"]["agree"]
+                    .as_array()
+                    .map(|a| a.len())
+                    .unwrap_or(0),
+                res["confirm"]["object"]
+                    .as_array()
+                    .map(|a| a.len())
+                    .unwrap_or(0),
+                res["entry_id"]
+                    .as_i64()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".into()),
                 one_line(res["conclusion"].as_str().unwrap_or(""), 120)
             ));
         }
@@ -1116,7 +1215,10 @@ impl<'a> Roundtable<'a> {
             self.say(&format!(
                 "[汇总·总体确认] passed={} agree={}/{} required={}",
                 oc.get("passed").map(|v| v.to_string()).unwrap_or_default(),
-                oc.get("agree").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+                oc.get("agree")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0),
                 oc.get("total").and_then(|v| v.as_i64()).unwrap_or(0),
                 oc.get("required").and_then(|v| v.as_i64()).unwrap_or(0)
             ));
@@ -1132,7 +1234,11 @@ impl<'a> Roundtable<'a> {
         }
         let issue_rows = self.issue_rows.clone();
         for row in &issue_rows {
-            let tag = if row["kind"] == json!("defect") { "【疑似缺陷】" } else { "" };
+            let tag = if row["kind"] == json!("defect") {
+                "【疑似缺陷】"
+            } else {
+                ""
+            };
             self.say(&format!(
                 "[汇总·遗留] {}{}（跟踪人：{}）",
                 tag,
@@ -1143,7 +1249,11 @@ impl<'a> Roundtable<'a> {
         let att = self.attendance();
         let missing: Vec<String> = att["absent_members"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         self.say(&format!(
             "[汇总·出席] 应到 {} 人 / 实到 {} 人 / 缺席 {} 人 —— {}；缺席名单：{}",
@@ -1151,7 +1261,11 @@ impl<'a> Roundtable<'a> {
             att["present"].as_i64().unwrap_or(0),
             att["absent"].as_i64().unwrap_or(0),
             self.attendance_line(),
-            if missing.is_empty() { "无（全员到齐）".to_string() } else { missing.join("、") }
+            if missing.is_empty() {
+                "无（全员到齐）".to_string()
+            } else {
+                missing.join("、")
+            }
         ));
         let defects = self
             .issue_rows
@@ -1162,7 +1276,12 @@ impl<'a> Roundtable<'a> {
         if !defects.is_empty() {
             let owners: Vec<String> = defects
                 .iter()
-                .map(|r| r["owner"].as_str().map(String::from).unwrap_or_else(|| "?".into()))
+                .map(|r| {
+                    r["owner"]
+                        .as_str()
+                        .map(String::from)
+                        .unwrap_or_else(|| "?".into())
+                })
                 .collect();
             self.say(&format!(
                 "[汇总·缺陷] 缺席开单 {} 条，24 小时内必须闭环：{}",
@@ -1214,9 +1333,23 @@ impl<'a> Roundtable<'a> {
         }
         self.say(&format!(
             "[会议] {} 议题={} 成员={} 主持={} 议程 {} 项 / 每项上限 {} 轮 / {:.0}s / {} 字符预算",
-            self.session_id, self.cfg_topic, self.members.join(","), self.moderator,
-            self.agenda.len(), self.max_rounds, self.deadline_s, self.budget_chars));
-        self.say(&format!("[目标] {}", if self.goal.is_empty() { "（未给）" } else { self.goal.as_str() }));
+            self.session_id,
+            self.cfg_topic,
+            self.members.join(","),
+            self.moderator,
+            self.agenda.len(),
+            self.max_rounds,
+            self.deadline_s,
+            self.budget_chars
+        ));
+        self.say(&format!(
+            "[目标] {}",
+            if self.goal.is_empty() {
+                "（未给）"
+            } else {
+                self.goal.as_str()
+            }
+        ));
         let agenda_print = self.agenda.clone();
         for item in &agenda_print {
             self.say(&format!(
@@ -1233,8 +1366,14 @@ impl<'a> Roundtable<'a> {
         let agenda = self.agenda.clone();
         for item in &agenda {
             if self.total_rounds_hit() {
-                self.defer_item(ctx, item, &format!(
-                    "整场已跑满 {} 轮（--max-total-rounds）", self.max_total_rounds));
+                self.defer_item(
+                    ctx,
+                    item,
+                    &format!(
+                        "整场已跑满 {} 轮（--max-total-rounds）",
+                        self.max_total_rounds
+                    ),
+                );
                 continue;
             }
             if let Some(rc) = self.run_item(ctx, item) {
@@ -1295,14 +1434,19 @@ impl<'a> Roundtable<'a> {
             seq, item["title"], item["expected"]
         ));
         let mut item_round = 0i64;
+        #[allow(unused_assignments)]
         let mut item_state = "running".to_string();
+        #[allow(unused_assignments)]
         let mut detail = String::new();
         let mut item_texts: Vec<String> = Vec::new();
 
         loop {
             if item_round > 0 && self.total_rounds_hit() {
                 item_state = "timeout".into();
-                detail = format!("整场已跑满 {} 轮（--max-total-rounds）", self.max_total_rounds);
+                detail = format!(
+                    "整场已跑满 {} 轮（--max-total-rounds）",
+                    self.max_total_rounds
+                );
                 self.say(&format!("[warn] 议程 {seq} 收尾：{detail}"));
                 break;
             }
@@ -1334,18 +1478,30 @@ impl<'a> Roundtable<'a> {
             self.say(&format!(
                 "[议程 {seq} 轮 {item_round}] 发言 {} 人 / 缺席 {} 人 / 异常 {} 人",
                 spoke,
-                turns.iter().filter(|t| t["status"] == json!("absent")).count(),
-                turns.iter().filter(|t| t["status"] == json!("error")).count()
+                turns
+                    .iter()
+                    .filter(|t| t["status"] == json!("absent"))
+                    .count(),
+                turns
+                    .iter()
+                    .filter(|t| t["status"] == json!("error"))
+                    .count()
             ));
 
             self.drop_chronic_absentees(ctx);
 
             if spoke < 2 {
-                self.abort(ctx.store, &format!("本轮实际发言人数 {spoke} < 2，会议无法继续"));
+                self.abort(
+                    ctx.store,
+                    &format!("本轮实际发言人数 {spoke} < 2，会议无法继续"),
+                );
                 return Some(3);
             }
             if self.active.len() < 2 {
-                self.abort(ctx.store, &format!("在场成员只剩 {} 人，会议无法继续", self.active.len()));
+                self.abort(
+                    ctx.store,
+                    &format!("在场成员只剩 {} 人，会议无法继续", self.active.len()),
+                );
                 return Some(3);
             }
 
@@ -1387,7 +1543,13 @@ impl<'a> Roundtable<'a> {
         (turns, new_texts)
     }
 
-    fn run_turn(&mut self, ctx: &mut RunCtx, member: &str, seq: i64, item: Option<&Value>) -> Value {
+    fn run_turn(
+        &mut self,
+        ctx: &mut RunCtx,
+        member: &str,
+        seq: i64,
+        item: Option<&Value>,
+    ) -> Value {
         let started = now_epoch_f();
         let base = json!({
             "session_id": self.session_id, "round_no": self.round_no, "seq": seq,
@@ -1398,15 +1560,22 @@ impl<'a> Roundtable<'a> {
         if !ctx.transport.ping(member) {
             *self.absent_streak.entry(member.to_string()).or_insert(0) += 1;
             let streak = *self.absent_streak.get(member).unwrap_or(&0);
-            self.mark_absent(member, "点名探针无应答，判定离线", &format!("第 {} 轮发言", self.round_no));
+            self.mark_absent(
+                member,
+                "点名探针无应答，判定离线",
+                &format!("第 {} 轮发言", self.round_no),
+            );
             self.say(&format!(
                 "[轮 {}] {} 离线（连续 {} 轮），跳过",
                 self.round_no, member, streak
             ));
-            let turn = merge_json(&base, &json!({
-                "status": "absent", "error": "点名探针无应答，判定离线",
-                "elapsed_ms": ((now_epoch_f() - started) * 1000.0) as i64,
-            }));
+            let turn = merge_json(
+                &base,
+                &json!({
+                    "status": "absent", "error": "点名探针无应答，判定离线",
+                    "elapsed_ms": ((now_epoch_f() - started) * 1000.0) as i64,
+                }),
+            );
             ctx.store.add_turn(&turn);
             return turn;
         }
@@ -1443,15 +1612,22 @@ impl<'a> Roundtable<'a> {
             let (status, reply, error) = ctx.transport.ask(member, &prompt, ASK_TIMEOUT_S);
             self.chars_used += reply.chars().count() as i64;
             if status != "ok" {
-                last_error = if error.is_empty() { "对方无有效应答".into() } else { error };
+                last_error = if error.is_empty() {
+                    "对方无有效应答".into()
+                } else {
+                    error
+                };
                 if status == "absent" {
                     *self.absent_streak.entry(member.to_string()).or_insert(0) += 1;
                     self.mark_absent(member, &last_error, &format!("第 {} 轮发言", self.round_no));
-                    let turn = merge_json(&base, &json!({
-                        "status": "absent", "error": last_error,
-                        "prompt_chars": prompt_chars,
-                        "elapsed_ms": ((now_epoch_f() - started) * 1000.0) as i64,
-                    }));
+                    let turn = merge_json(
+                        &base,
+                        &json!({
+                            "status": "absent", "error": last_error,
+                            "prompt_chars": prompt_chars,
+                            "elapsed_ms": ((now_epoch_f() - started) * 1000.0) as i64,
+                        }),
+                    );
                     ctx.store.add_turn(&turn);
                     return turn;
                 }
@@ -1508,7 +1684,9 @@ impl<'a> Roundtable<'a> {
                 ctx.store.add_turn(&turn);
                 if let Some(eid) = entry_id {
                     *self.spoken.entry(member.to_string()).or_insert(0) += 1;
-                    *self.tally.entry(m["stance"].as_str().unwrap_or("neutral").to_string())
+                    *self
+                        .tally
+                        .entry(m["stance"].as_str().unwrap_or("neutral").to_string())
                         .or_insert(0) += 1;
                     self.cited_entries.push(eid);
                     for r in m["refs"].as_array().unwrap_or(&vec![]) {
@@ -1529,28 +1707,37 @@ impl<'a> Roundtable<'a> {
                 return turn;
             }
             // ② 格式对但 refs 空 → 整条不入库，turn 记 error
-            self.say(&format!("[轮 {}] {} refs 为空，按纪律不入库", self.round_no, member));
-            let turn = merge_json(&base, &json!({
-                "status": "error", "kind": m["kind"], "stance": m["stance"],
-                "vote": m["vote"], "confidence": m["confidence"], "content": Value::Null,
-                "error": if last_error.is_empty() {
-                    "refs 为空或缺失：没有证据的观点不入库".to_string()
-                } else {
-                    last_error.clone()
-                },
-                "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
-            }));
+            self.say(&format!(
+                "[轮 {}] {} refs 为空，按纪律不入库",
+                self.round_no, member
+            ));
+            let turn = merge_json(
+                &base,
+                &json!({
+                    "status": "error", "kind": m["kind"], "stance": m["stance"],
+                    "vote": m["vote"], "confidence": m["confidence"], "content": Value::Null,
+                    "error": if last_error.is_empty() {
+                        "refs 为空或缺失：没有证据的观点不入库".to_string()
+                    } else {
+                        last_error.clone()
+                    },
+                    "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
+                }),
+            );
             ctx.store.add_turn(&turn);
             return turn;
         }
 
         // ③ 对方压根没给出可用回包
         if raw_reply.is_empty() {
-            let turn = merge_json(&base, &json!({
-                "status": "error",
-                "error": if last_error.is_empty() { "无有效应答".to_string() } else { last_error.clone() },
-                "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
-            }));
+            let turn = merge_json(
+                &base,
+                &json!({
+                    "status": "error",
+                    "error": if last_error.is_empty() { "无有效应答".to_string() } else { last_error.clone() },
+                    "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
+                }),
+            );
             ctx.store.add_turn(&turn);
             return turn;
         }
@@ -1560,22 +1747,30 @@ impl<'a> Roundtable<'a> {
             "value": format!("{}#r{}-s{}", self.session_id, self.round_no, seq)}]);
         let content = truncate(raw_reply.trim(), CONTENT_MAX);
         let (entry_id, post_err) =
-            ctx.bb.post_entry(&self.cfg_topic, "opinion", &content, &self_ref);
+            ctx.bb
+                .post_entry(&self.cfg_topic, "opinion", &content, &self_ref);
         let mut reason = format!(
             "parse_degraded：{}（已整段留痕，refs 自引）",
-            if last_error.is_empty() { "解析失败" } else { &last_error }
+            if last_error.is_empty() {
+                "解析失败"
+            } else {
+                &last_error
+            }
         );
         if let Some(pe) = &post_err {
             reason += &format!("；写黑板失败：{pe}");
         }
         self.say(&format!("[轮 {}] {} {}", self.round_no, member, reason));
-        let turn = merge_json(&base, &json!({
-            "status": if entry_id.is_some() { "ok" } else { "error" },
-            "kind": "opinion", "stance": "neutral", "vote": "continue", "confidence": 0.3,
-            "content": content, "refs": self_ref,
-            "entry_id": json_of(entry_id),
-            "error": reason, "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
-        }));
+        let turn = merge_json(
+            &base,
+            &json!({
+                "status": if entry_id.is_some() { "ok" } else { "error" },
+                "kind": "opinion", "stance": "neutral", "vote": "continue", "confidence": 0.3,
+                "content": content, "refs": self_ref,
+                "entry_id": json_of(entry_id),
+                "error": reason, "prompt_chars": prompt_chars, "elapsed_ms": elapsed_ms,
+            }),
+        );
         ctx.store.add_turn(&turn);
         if entry_id.is_some() {
             *self.spoken.entry(member.to_string()).or_insert(0) += 1;
@@ -1642,22 +1837,44 @@ impl<'a> Roundtable<'a> {
 
     // ---------------- 议程项结论 + 当场确认 ----------------
 
-    fn conclude_item(&mut self, ctx: &mut RunCtx, item: &Value, rounds: i64, item_state: &str, detail: &str) {
+    fn conclude_item(
+        &mut self,
+        ctx: &mut RunCtx,
+        item: &Value,
+        rounds: i64,
+        item_state: &str,
+        detail: &str,
+    ) {
         let seq = item["seq"].as_i64().unwrap_or(0);
         let moderator = self.pick_moderator(ctx.transport);
         let snippets = self.snippets(ctx);
         let mut text = String::new();
         if let Some(mod_name) = &moderator {
             let (prompt, used) = render_conclusion_prompt(
-                &self.cfg_topic, &self.question, rounds, &self.tally_json(), &snippets,
-                self.max_chars, &self.goal, &self.agenda, Some(item), &[], &[], "",
+                &self.cfg_topic,
+                &self.question,
+                rounds,
+                &self.tally_json(),
+                &snippets,
+                self.max_chars,
+                &self.goal,
+                &self.agenda,
+                Some(item),
+                &[],
+                &[],
+                "",
                 "",
             );
             self.say(&format!(
                 "[议程 {seq} 结论] 主持人 {mod_name}：prompt {} 字符 / 片段 {used} 条",
                 prompt.chars().count()
             ));
-            let reply = self.ask_moderator(mod_name, &prompt, &format!("议程 {seq} 结论"), ctx.transport);
+            let reply = self.ask_moderator(
+                mod_name,
+                &prompt,
+                &format!("议程 {seq} 结论"),
+                ctx.transport,
+            );
             if !reply.is_empty() {
                 let (parsed, _err) = parse_turn(&reply);
                 text = match parsed {
@@ -1752,10 +1969,7 @@ impl<'a> Roundtable<'a> {
                     seq,
                     one_line(item["title"].as_str().unwrap_or(""), 80)
                 ),
-                &format!(
-                    "{note}；本项结论：{}",
-                    one_line(&text, 400)
-                ),
+                &format!("{note}；本项结论：{}", one_line(&text, 400)),
                 first_object.as_deref(),
                 None,
                 "issue",
@@ -1793,14 +2007,24 @@ impl<'a> Roundtable<'a> {
         };
         let mut rows: Vec<Value> = Vec::new();
         for member in speakers {
-            let prompt =
-                render_confirm_prompt(&member, &self.goal, &label, conclusion, self.max_chars, item);
+            let prompt = render_confirm_prompt(
+                &member,
+                &self.goal,
+                &label,
+                conclusion,
+                self.max_chars,
+                item,
+            );
             self.chars_used += prompt.chars().count() as i64;
             self.log_prompt(&format!("{member}(确认 {target})"), &prompt);
             let (status, reply, error) = ctx.transport.ask(&member, &prompt, ASK_TIMEOUT_S);
             self.chars_used += reply.chars().count() as i64;
             let (verdict, mut note) = if status != "ok" || reply.is_empty() {
-                let raw = if error.is_empty() { "确认点名无应答".to_string() } else { error };
+                let raw = if error.is_empty() {
+                    "确认点名无应答".to_string()
+                } else {
+                    error
+                };
                 let n = truncate(&raw, 200);
                 self.mark_absent(&member, &n, &format!("确认 {target}"));
                 ("absent".to_string(), n)
@@ -1866,9 +2090,19 @@ impl<'a> Roundtable<'a> {
             let mut retry_reason = String::new();
             for attempt in 1..=2 {
                 let (prompt, used) = render_conclusion_prompt(
-                    &self.cfg_topic, &self.question, self.round_no, &self.tally_json(),
-                    &snippets, self.max_chars, &self.goal, &self.agenda, None,
-                    &self.item_results, &roster, &now_utc_iso(), &retry_reason,
+                    &self.cfg_topic,
+                    &self.question,
+                    self.round_no,
+                    &self.tally_json(),
+                    &snippets,
+                    self.max_chars,
+                    &self.goal,
+                    &self.agenda,
+                    None,
+                    &self.item_results,
+                    &roster,
+                    &now_utc_iso(),
+                    &retry_reason,
                 );
                 self.say(&format!(
                     "[总体结论] 主持人 {mod_name} 第 {attempt} 次：prompt {} 字符 / 片段 {used} 条",
@@ -1951,7 +2185,11 @@ impl<'a> Roundtable<'a> {
             let joined = action_errors.join("；");
             let reason = format!(
                 "落实事项缺失或不合格：{}",
-                if action_errors.is_empty() { "没给 actions" } else { joined.as_str() }
+                if action_errors.is_empty() {
+                    "没给 actions"
+                } else {
+                    joined.as_str()
+                }
             );
             self.state = "incomplete".into();
             self.note = if self.note.is_empty() {
@@ -1989,7 +2227,11 @@ impl<'a> Roundtable<'a> {
         // ---- 缺席导致证据不全
         let missing: Vec<String> = self.attendance()["absent_members"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         if !missing.is_empty() {
             self.record_issue(
@@ -2114,7 +2356,11 @@ impl<'a> Roundtable<'a> {
         let att = self.attendance();
         let missing: Vec<String> = att["absent_members"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut parts = vec![
             text.to_string(),
@@ -2124,12 +2370,20 @@ impl<'a> Roundtable<'a> {
                 att["expected"].as_i64().unwrap_or(0),
                 att["present"].as_i64().unwrap_or(0),
                 self.attendance_line(),
-                if missing.is_empty() { "无".to_string() } else { missing.join("、") }
+                if missing.is_empty() {
+                    "无".to_string()
+                } else {
+                    missing.join("、")
+                }
             ),
             "【逐项结论】".to_string(),
         ];
         for res in &self.item_results {
-            let mark = if res["status"] == json!("concluded") { "已确认" } else { "未当场确认" };
+            let mark = if res["status"] == json!("concluded") {
+                "已确认"
+            } else {
+                "未当场确认"
+            };
             parts.push(format!(
                 "· 第 {} 项 {}（{}）：{}",
                 res["seq"],
@@ -2233,7 +2487,11 @@ mod tests {
         let mut bb = NullBlackboard::new(Vec::new());
         let mut tr = DryRunTransport::new(HashMap::new(), &[], HashMap::new(), &[], 7);
         let mut rt = Roundtable::new(cfg(&["a", "b", "c"], agenda), &mut sink);
-        let rc = rt.run(&mut RunCtx { store: &mut store, bb: &mut bb, transport: &mut tr });
+        let rc = rt.run(&mut RunCtx {
+            store: &mut store,
+            bb: &mut bb,
+            transport: &mut tr,
+        });
         assert_eq!(rc, 0, "dry-run 全链应 rc=0");
         // 两个议程项都有结论；出席 3/3；sessions 状态 converged（actions 合法）
         assert_eq!(rt.item_results.len(), 2);
@@ -2257,7 +2515,11 @@ mod tests {
         let mut bb = NullBlackboard::new(Vec::new());
         let mut tr = DryRunTransport::new(HashMap::new(), &["c"], HashMap::new(), &[], 7);
         let mut rt = Roundtable::new(cfg(&["a", "b", "c"], agenda), &mut sink);
-        let rc = rt.run(&mut RunCtx { store: &mut store, bb: &mut bb, transport: &mut tr });
+        let rc = rt.run(&mut RunCtx {
+            store: &mut store,
+            bb: &mut bb,
+            transport: &mut tr,
+        });
         assert_eq!(rc, 0);
         // 缺席者自动开 defect 单（owner=c）
         let defects: Vec<&Value> = store
@@ -2283,7 +2545,11 @@ mod tests {
         let mut bb = NullBlackboard::new(Vec::new());
         let mut tr = DryRunTransport::new(HashMap::new(), &[], verdicts, &[], 7);
         let mut rt = Roundtable::new(cfg(&["a", "b", "c"], agenda), &mut sink);
-        let rc = rt.run(&mut RunCtx { store: &mut store, bb: &mut bb, transport: &mut tr });
+        let rc = rt.run(&mut RunCtx {
+            store: &mut store,
+            bb: &mut bb,
+            transport: &mut tr,
+        });
         assert_eq!(rc, 0);
         // object 了 → 该项 deferred，且留了"被 a 反对"的遗留问题
         assert_eq!(rt.item_results[0]["status"], json!("deferred"));

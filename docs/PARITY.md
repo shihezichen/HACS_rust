@@ -244,3 +244,5 @@
 - 内存：Python 30,496 kB vs Rust 3,584 kB = **8.5×**（release + /usr/bin/time -v Max RSS）。
 
 52. gen_nats_conf / serve / roster_creds_mirror（C 层 + tools 面三件）：gen_nats_conf 口令只从 creds/<成员>.pass 读、缺件必拒 rc=2、--drop-user 唯一退场、--dry-run 不写盘（与 Python 对齐）；serve 仅开发用静态+反代，/api 错误信封对齐 chat_svc 契约；creds_mirror 纯逻辑（probe/parse_probe/analyze/exit_code）逐条对齐，出口只有 sha256[:12]、口令只走 ssh stdin 绝不进 argv，采集失败绝不退化为 0/1。Rust 侧 ssh 目标表用 env AGENT_TEAM_SSH_TARGETS（Python 为内置真值表）——部署表来源不同，口径一致。RT_FAKE_REPLY 已在 51 登记。
+
+53. nodelet（L0 轻量节点守护 + bin，9971）：绑定面只放行环回/尾网（拒启不回退）；单元状态两布尔（查不出来=不认识，不编造）；凭据红线出口机械复核（形状违规即 panic）；探针键序冻结断言；--once/--node/--bind/--services 薄壳口径对齐。偏差：① version 指纹 Python=磁盘 nodelet.py 的 md5[:8]，Rust=二进制自身的 sha256[:8]（自观测"该不该重启"用途不变，算法不参与跨实现比对）；② 档案面 profile.file 记 "node_profile.rs"（Python 记模块文件名）；③ 时间戳 UTC Z 形态一致；④ services 查询 stderr 丢弃口径一致，GBK 中文 Windows 场景 Rust 侧 utf-8 lossy（Linux 部署无差）。

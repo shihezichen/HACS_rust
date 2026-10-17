@@ -17,7 +17,7 @@ use serde_json::{json, Map, Value};
 pub(crate) fn json_of<T: Into<Value>>(v: Option<T>) -> Value {
     v.map(Into::into).unwrap_or(Value::Null)
 }
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const VERSION: &str = "1.2";
 pub const DEFAULT_MAX_ROUNDS: i64 = 2;
@@ -46,13 +46,20 @@ pub const REF_TYPES: [&str; 5] = ["entry", "file", "measurement", "session", "tu
 pub const VERDICTS: [&str; 4] = ["agree", "object", "abstain", "absent"];
 
 pub const MUTABLE_SESSION_COLUMNS: [&str; 11] = [
-    "state", "round_no", "ended_at", "conclusion_entry", "note", "confirmed_at",
-    "confirm_summary", "expected_count", "present_count", "absent_count", "attendance_rate",
+    "state",
+    "round_no",
+    "ended_at",
+    "conclusion_entry",
+    "note",
+    "confirmed_at",
+    "confirm_summary",
+    "expected_count",
+    "present_count",
+    "absent_count",
+    "attendance_rate",
 ];
-pub const MUTABLE_AGENDA_COLUMNS: [&str; 4] =
-    ["conclusion", "conclusion_entry", "status", "note"];
-pub const SESSION_STATES: [&str; 5] =
-    ["running", "converged", "timeout", "aborted", "incomplete"];
+pub const MUTABLE_AGENDA_COLUMNS: [&str; 4] = ["conclusion", "conclusion_entry", "status", "note"];
+pub const SESSION_STATES: [&str; 5] = ["running", "converged", "timeout", "aborted", "incomplete"];
 
 pub fn default_moderator() -> String {
     std::env::var("AGENT_TEAM_MODERATOR")
@@ -82,7 +89,10 @@ pub fn now_epoch_f() -> f64 {
 /// UTC `YYYYMMDD-HHMMSS`。
 fn utc_stamp(epoch: f64) -> String {
     let (y, mo, d, h, mi) = crate::team_group::beijing_parts_pub(epoch as i64);
-    format!("{y:04}{mo:02}{d:02}-{h:02}{mi:02}{:02}", (epoch as i64) % 60)
+    format!(
+        "{y:04}{mo:02}{d:02}-{h:02}{mi:02}{:02}",
+        (epoch as i64) % 60
+    )
 }
 
 pub fn new_session_id(now: f64) -> String {
@@ -117,13 +127,15 @@ pub fn read_secret(path: &str) -> Result<String, String> {
 }
 
 pub fn read_dsn(path: &str) -> Result<String, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("读不到 DSN 文件 {path}：{e}"))?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("读不到 DSN 文件 {path}：{e}"))?;
     for line in text.lines() {
         if let Some(v) = line.strip_prefix("BB_PG_DSN=") {
             let mut value = v.trim_end_matches(['\r', '\n']).trim().to_string();
             let bytes: Vec<char> = value.chars().collect();
-            if bytes.len() >= 2 && bytes[0] == bytes[bytes.len() - 1] && (bytes[0] == '\'' || bytes[0] == '"') {
+            if bytes.len() >= 2
+                && bytes[0] == bytes[bytes.len() - 1]
+                && (bytes[0] == '\'' || bytes[0] == '"')
+            {
                 value = bytes[1..bytes.len() - 1].iter().collect();
             }
             return Ok(value);
@@ -296,7 +308,10 @@ pub fn parse_turn(raw: &str) -> (Option<Map<String, Value>>, Option<String>) {
         vote = "continue".into();
     }
     let mut confidence = obj["confidence"].as_f64().unwrap_or_else(|| {
-        obj["confidence"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.5)
+        obj["confidence"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.5)
     });
     if !confidence.is_finite() {
         confidence = 0.5;
@@ -313,7 +328,10 @@ pub fn parse_turn(raw: &str) -> (Option<Map<String, Value>>, Option<String>) {
     turn.insert("actions".into(), obj["actions"].clone());
     turn.insert("issues".into(), obj["issues"].clone());
     if refs.is_empty() {
-        return (Some(turn), Some("refs 为空或缺失：没有证据的观点不入库".into()));
+        return (
+            Some(turn),
+            Some("refs 为空或缺失：没有证据的观点不入库".into()),
+        );
     }
     (Some(turn), None)
 }
@@ -357,7 +375,13 @@ pub fn parse_confirm(raw: &str) -> (String, String, Option<String>) {
     let (obj, err) = extract_json_object(raw);
     let obj = match obj {
         Some(o) => o,
-        None => return ("abstain".into(), String::new(), Some(err.unwrap_or_else(|| "确认回包无法解析".into()))),
+        None => {
+            return (
+                "abstain".into(),
+                String::new(),
+                Some(err.unwrap_or_else(|| "确认回包无法解析".into())),
+            )
+        }
     };
     let verdict = obj["verdict"].as_str().unwrap_or("").trim().to_lowercase();
     let note = obj["note"].as_str().unwrap_or("").trim().to_string();
@@ -399,7 +423,10 @@ pub fn parse_iso_datetime(value: &Value) -> Option<i64> {
     let text = match value {
         Value::String(s) => s.trim().to_string(),
         _ if value.is_null() => return None,
-        other => other.as_str().map(|s| s.trim().to_string()).unwrap_or_default(),
+        other => other
+            .as_str()
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default(),
     };
     if text.is_empty() {
         return None;
@@ -436,8 +463,16 @@ pub fn validate_actions(
                 continue;
             }
         };
-        let what = obj.get("what").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let owner = obj.get("owner").and_then(|v| v.as_str()).unwrap_or("").trim();
+        let what = obj
+            .get("what")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let owner = obj
+            .get("owner")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
         let due_raw = obj.get("due_at").cloned().unwrap_or(Value::Null);
         let mut reasons: Vec<String> = Vec::new();
         if what.is_empty() {
@@ -449,15 +484,17 @@ pub fn validate_actions(
             let mut sorted: Vec<&String> = roster_set.iter().copied().collect();
             sorted.sort();
             let names: Vec<String> = sorted.iter().map(|s| s.to_string()).collect();
-            reasons.push(format!("owner={owner:?} 不在 roster 内（可选：{}）", names.join(",")));
+            reasons.push(format!(
+                "owner={owner:?} 不在 roster 内（可选：{}）",
+                names.join(",")
+            ));
         }
         let due = parse_iso_datetime(&due_raw);
         match due {
             None => reasons.push(format!("due_at={due_raw:?} 不是合法 ISO8601 时间")),
-            Some(t) if t <= now_epoch => reasons.push(format!(
-                "due_at={} 不晚于当前时间",
-                iso_utc(t)
-            )),
+            Some(t) if t <= now_epoch => {
+                reasons.push(format!("due_at={} 不晚于当前时间", iso_utc(t)))
+            }
             _ => {}
         }
         if !reasons.is_empty() {
@@ -519,7 +556,10 @@ pub fn parse_issues(value: &Value) -> Vec<Map<String, Value>> {
             m.insert("title".into(), json!(truncate(&title, 300)));
             m.insert(
                 "detail".into(),
-                json!(truncate(obj.get("detail").and_then(|v| v.as_str()).unwrap_or(""), 1000)),
+                json!(truncate(
+                    obj.get("detail").and_then(|v| v.as_str()).unwrap_or(""),
+                    1000
+                )),
             );
             m.insert(
                 "owner".into(),
@@ -625,7 +665,11 @@ pub fn check_convergence(
     prior_texts: &[String],
 ) -> (bool, String, String) {
     if round_no < 2 {
-        return (false, String::new(), format!("第 {round_no} 轮：未满 2 轮，不允许判收敛"));
+        return (
+            false,
+            String::new(),
+            format!("第 {round_no} 轮：未满 2 轮，不允许判收敛"),
+        );
     }
     let spoke: Vec<&Value> = turns.iter().filter(|t| t["status"] == "ok").collect();
     let ratio = repetition_ratio(new_texts, prior_texts);
@@ -659,7 +703,10 @@ pub fn check_convergence(
         return (
             true,
             "vote".into(),
-            format!("本轮 {converge_votes}/{} 人投 converge（过半需 {need}）", spoke.len()),
+            format!(
+                "本轮 {converge_votes}/{} 人投 converge（过半需 {need}）",
+                spoke.len()
+            ),
         );
     }
     (
@@ -684,7 +731,10 @@ pub fn check_hard_stop(
         return (true, format!("达到最大轮次 {max_rounds}"));
     }
     if elapsed_s >= deadline_s {
-        return (true, format!("超过 deadline {deadline_s:.0}s（已用 {elapsed_s:.0}s）"));
+        return (
+            true,
+            format!("超过 deadline {deadline_s:.0}s（已用 {elapsed_s:.0}s）"),
+        );
     }
     if budget_chars > 0 && chars_used >= budget_chars {
         return (
@@ -787,7 +837,9 @@ mod tests {
                 {"what": "y", "owner": "b", "due_at": "1999-01-01T00:00:00+00:00"},
                 {"what": "z", "owner": "b", "due_at": "not-a-time"},
             ]),
-            &roster, now, &[1],
+            &roster,
+            now,
+            &[1],
         );
         assert_eq!(ok.len(), 1);
         assert_eq!(errs.len(), 4);
@@ -837,13 +889,37 @@ mod tests {
         let snippets: Vec<Value> = (0..20)
             .map(|i| json!({"entry_id": i, "author": "a", "kind": "opinion", "content": "x".repeat(100)}))
             .collect();
-        let (p, used) = crate::roundtable_sched::render_prompt("a", "t", "q", 1, 2, &snippets, 6000, "", "g", &agenda, Some(1));
+        let (p, used) = crate::roundtable_sched::render_prompt(
+            "a",
+            "t",
+            "q",
+            1,
+            2,
+            &snippets,
+            6000,
+            "",
+            "g",
+            &agenda,
+            Some(1),
+        );
         assert!(used <= SNIPPET_MAX);
         assert!(p.chars().count() <= 6000);
-        assert!(p.contains("▶ 1."));       // 当前项标记
+        assert!(p.contains("▶ 1.")); // 当前项标记
         assert!(p.contains("【输出契约】"));
         // 极小预算：砍片段 + 只留当前项 + 硬截
-        let (p2, used2) = crate::roundtable_sched::render_prompt("a", "t", "q", 1, 2, &snippets, 400, "", "g", &agenda, Some(1));
+        let (p2, used2) = crate::roundtable_sched::render_prompt(
+            "a",
+            "t",
+            "q",
+            1,
+            2,
+            &snippets,
+            400,
+            "",
+            "g",
+            &agenda,
+            Some(1),
+        );
         assert!(p2.chars().count() <= 400);
         assert!(used2 <= used);
     }
@@ -854,7 +930,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("pg.env");
         std::fs::write(&f, "BB_PG_DSN=host=x port=5 dbname=y\n").unwrap();
-        assert_eq!(read_dsn(f.to_str().unwrap()).unwrap(), "host=x port=5 dbname=y");
+        assert_eq!(
+            read_dsn(f.to_str().unwrap()).unwrap(),
+            "host=x port=5 dbname=y"
+        );
         let sid = new_session_id(1_800_000_000.0);
         assert!(sid.starts_with("rt-") && sid.len() >= 15);
     }

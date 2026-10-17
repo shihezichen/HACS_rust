@@ -570,23 +570,22 @@ pub fn extract_scene(msgs: &[Msg]) -> Scene {
     let mut seen_d: HashSet<String> = HashSet::new();
     let mut seen_dec: HashSet<String> = HashSet::new();
 
-    let mut add =
-        |bucket: &mut Vec<SceneItem>, seen: &mut HashSet<String>, text: &str, src: &str| {
-            let text = clean_line(text);
-            if text.is_empty() || in_status_noise(&text) {
-                return;
-            }
-            let key = dedup_key(&text);
-            if key.is_empty() || seen.contains(&key) {
-                return;
-            }
-            seen.insert(key);
-            bucket.push(SceneItem {
-                text: clip(&text, 240),
-                src: src.to_string(),
-                blocked_by: Vec::new(),
-            });
-        };
+    let add = |bucket: &mut Vec<SceneItem>, seen: &mut HashSet<String>, text: &str, src: &str| {
+        let text = clean_line(text);
+        if text.is_empty() || in_status_noise(&text) {
+            return;
+        }
+        let key = dedup_key(&text);
+        if key.is_empty() || seen.contains(&key) {
+            return;
+        }
+        seen.insert(key);
+        bucket.push(SceneItem {
+            text: clip(&text, 240),
+            src: src.to_string(),
+            blocked_by: Vec::new(),
+        });
+    };
 
     for (idx, m) in msgs.iter().enumerate() {
         if m.role == "tool" {
