@@ -826,18 +826,34 @@ fn key_bytes(raw: &str) -> Result<Vec<u8>, String> {
 
 /// 生成会话签名密钥文件（32 字节随机 base64，权限 600）。已有且未 --force 则报错。
 pub fn init_key(path: &str, force: bool) -> Result<String, String> {
-    use std::os::unix::fs::PermissionsExt;
-    if std::path::Path::new(path).exists() && !force {
-        return Err(format!(
-            "密钥文件已存在：{path}（要换新密钥请加 --force，注意会让所有人重新登录）"
-        ));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if std::path::Path::new(path).exists() && !force {
+            return Err(format!(
+                "密钥文件已存在：{path}（要换新密钥请加 --force，注意会让所有人重新登录）"
+            ));
+        }
+        if let Some(dir) = std::path::Path::new(path).parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let key = b64url(&urandom(KEY_BYTES));
+        std::fs::write(path, format!("{key}\n")).map_err(|e| e.to_string())?;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
-    if let Some(dir) = std::path::Path::new(path).parent() {
-        let _ = std::fs::create_dir_all(dir);
+    #[cfg(not(unix))]
+    {
+        if std::path::Path::new(path).exists() && !force {
+            return Err(format!(
+                "密钥文件已存在：{path}（要换新密钥请加 --force，注意会让所有人重新登录）"
+            ));
+        }
+        if let Some(dir) = std::path::Path::new(path).parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let key = b64url(&urandom(KEY_BYTES));
+        std::fs::write(path, format!("{key}\n")).map_err(|e| e.to_string())?;
     }
-    let key = b64url(&urandom(KEY_BYTES));
-    std::fs::write(path, format!("{key}\n")).map_err(|e| e.to_string())?;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     Ok(path.to_string())
 }
 
