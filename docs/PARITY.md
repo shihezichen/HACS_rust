@@ -205,3 +205,6 @@
 44. **`blackboard_view` 路由闭包与 auth_gate 的 visitor 双解析**：Python 在 do_GET
     解析一次 visitor；Rust 网关 auth 钩子与路由闭包是两个 Ctx 对象，各解析一次
     （多一次会话查库），语义等价——auth 门禁仍以 gate 结果为准。
+
+45. session_ctx_archiver：Python `str.lines()`/`re` 全部手写对应物（API_RE/编号切分/BLOCKED_BY_RE/resume 指针剥离）；`_clip`/`_clean_line` 按 Python 字符语义；`[\W_]` 长度统计用 Unicode alphanumeric。agent.log last_ts 取行首 19 字符。one-shot CLI，内存对比 Py 22,780 kB vs Rust release 4,736 kB（4.8×）。
+46. session_ctx_archiver：群消息/memo PATCH 走 L1 手写 http_client（Connection: close，不跟重定向）；memo PATCH 409 重试 3 次 × 400ms 间隔 = Python；state.db 用 rusqlite 只读模式（=sqlite3 uri mode=ro）。

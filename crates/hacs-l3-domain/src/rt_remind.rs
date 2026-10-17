@@ -179,11 +179,7 @@ pub fn make_item(
         due_at: to_utc(due_at),
         status: status.to_string(),
         session_id: session_id.map(String::from),
-        issue_kind: if kind.is_empty() {
-            None
-        } else {
-            Some(kind)
-        },
+        issue_kind: if kind.is_empty() { None } else { Some(kind) },
         topic: topic.map(String::from),
     }
 }
@@ -216,11 +212,16 @@ pub fn select_overdue(items: &[Item], now: i64) -> Vec<Item> {
         .cloned()
         .collect();
     out.sort_by(|a, b| {
-        (a.due_at.unwrap_or(0), a.target_kind.clone(), a.target_id.to_string()).cmp(&(
-            b.due_at.unwrap_or(0),
-            b.target_kind.clone(),
-            b.target_id.to_string(),
-        ))
+        (
+            a.due_at.unwrap_or(0),
+            a.target_kind.clone(),
+            a.target_id.to_string(),
+        )
+            .cmp(&(
+                b.due_at.unwrap_or(0),
+                b.target_kind.clone(),
+                b.target_id.to_string(),
+            ))
     });
     out
 }
@@ -323,10 +324,7 @@ pub fn render_call(owner: &str, rows: &[Item], now: i64) -> String {
     }
     let tail = "请今天内做到二选一：把事办完并回帖闭环，或者说明为什么改期、改到什么时候。\
                 缺陷单（疑似程序缺陷）必须查清原因，不许直接关掉。";
-    truncate(
-        &format!("{head} {} {tail}", parts.join(" ")),
-        CALL_TEXT_MAX,
-    )
+    truncate(&format!("{head} {} {tail}", parts.join(" ")), CALL_TEXT_MAX)
 }
 
 // ================================================================ 内存库（fixture / 单测）
@@ -359,8 +357,11 @@ impl MemoryStore {
     }
 
     pub fn log_reminder(&mut self, target_kind: &str, target_id: &Value, owner: Option<&str>) {
-        self.logged
-            .push((target_kind.to_string(), target_id.clone(), owner.map(String::from)));
+        self.logged.push((
+            target_kind.to_string(),
+            target_id.clone(),
+            owner.map(String::from),
+        ));
         self.sent
             .push((target_kind.to_string(), target_id.clone(), now_epoch()));
     }
@@ -376,7 +377,12 @@ fn now_epoch() -> i64 {
 /// 从 JSON 造一个内存库（--fixture 离线自测用）。
 pub fn load_fixture(data: &Value) -> MemoryStore {
     let mut store = MemoryStore::default();
-    for row in data.get("actions").and_then(Value::as_array).into_iter().flatten() {
+    for row in data
+        .get("actions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         store.items.push(make_item(
             "action",
             row.get("action_id").cloned().unwrap_or(Value::Null),
@@ -389,7 +395,12 @@ pub fn load_fixture(data: &Value) -> MemoryStore {
             row.get("topic").and_then(Value::as_str),
         ));
     }
-    for row in data.get("issues").and_then(Value::as_array).into_iter().flatten() {
+    for row in data
+        .get("issues")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         store.items.push(make_item(
             "issue",
             row.get("issue_id").cloned().unwrap_or(Value::Null),
@@ -410,7 +421,10 @@ pub fn load_fixture(data: &Value) -> MemoryStore {
     {
         let ts = to_utc(row.get("sent_at").unwrap_or(&Value::Null)).unwrap_or_else(now_epoch);
         store.sent.push((
-            row.get("target_kind").and_then(Value::as_str).unwrap_or("").to_string(),
+            row.get("target_kind")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
             row.get("target_id").cloned().unwrap_or(Value::Null),
             ts,
         ));
@@ -567,8 +581,15 @@ mod tests {
         format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:00Z")
     }
 
-    fn item(kind: &str, id: i64, title: &str, owner: Option<&str>, due_at: Option<i64>,
-            status: &str, issue_kind: Option<&str>) -> Item {
+    fn item(
+        kind: &str,
+        id: i64,
+        title: &str,
+        owner: Option<&str>,
+        due_at: Option<i64>,
+        status: &str,
+        issue_kind: Option<&str>,
+    ) -> Item {
         make_item(
             kind,
             json!(id),
@@ -586,9 +607,19 @@ mod tests {
     fn test_is_overdue_strict_boundary() {
         // 正好等于 now 不算逾期（严格早于）
         assert!(!is_overdue(Some(NOW), "open", &ACTION_OPEN_STATUSES, NOW));
-        assert!(is_overdue(Some(NOW - 1), "open", &ACTION_OPEN_STATUSES, NOW));
+        assert!(is_overdue(
+            Some(NOW - 1),
+            "open",
+            &ACTION_OPEN_STATUSES,
+            NOW
+        ));
         // 闭环了不算
-        assert!(!is_overdue(Some(NOW - 1), "done", &ACTION_OPEN_STATUSES, NOW));
+        assert!(!is_overdue(
+            Some(NOW - 1),
+            "done",
+            &ACTION_OPEN_STATUSES,
+            NOW
+        ));
         // 没截止不算
         assert!(!is_overdue(None, "open", &ACTION_OPEN_STATUSES, NOW));
     }
@@ -596,8 +627,14 @@ mod tests {
     #[test]
     fn test_human_late_and_fmt_time() {
         // 3 天 5 小时前
-        assert_eq!(human_late(Some(NOW - 3 * 86400 - 5 * 3600), NOW), "3 天 5 小时");
-        assert_eq!(human_late(Some(NOW - 2 * 3600 - 10 * 60), NOW), "2 小时 10 分钟");
+        assert_eq!(
+            human_late(Some(NOW - 3 * 86400 - 5 * 3600), NOW),
+            "3 天 5 小时"
+        );
+        assert_eq!(
+            human_late(Some(NOW - 2 * 3600 - 10 * 60), NOW),
+            "2 小时 10 分钟"
+        );
         assert_eq!(human_late(Some(NOW - 7 * 60), NOW), "7 分钟");
         assert_eq!(human_late(Some(NOW + 60), NOW), "还没到期");
         assert_eq!(human_late(None, NOW), "未定截止");
@@ -622,10 +659,42 @@ mod tests {
     #[test]
     fn test_select_overdue_sort_and_states() {
         let items = vec![
-            item("action", 1, "新逾期", Some("o"), Some(NOW - 10), "open", None),
-            item("action", 2, "闭环了", Some("o"), Some(NOW - 20), "done", None),
-            item("issue", 3, "更早", Some("o"), Some(NOW - 99999), "watching", None),
-            item("issue", 4, "defect", Some("o"), Some(NOW - 500), "open", Some("defect")),
+            item(
+                "action",
+                1,
+                "新逾期",
+                Some("o"),
+                Some(NOW - 10),
+                "open",
+                None,
+            ),
+            item(
+                "action",
+                2,
+                "闭环了",
+                Some("o"),
+                Some(NOW - 20),
+                "done",
+                None,
+            ),
+            item(
+                "issue",
+                3,
+                "更早",
+                Some("o"),
+                Some(NOW - 99999),
+                "watching",
+                None,
+            ),
+            item(
+                "issue",
+                4,
+                "defect",
+                Some("o"),
+                Some(NOW - 500),
+                "open",
+                Some("defect"),
+            ),
         ];
         let out = select_overdue(&items, NOW);
         let ids: Vec<i64> = out.iter().map(|i| i.target_id.as_i64().unwrap()).collect();
@@ -650,7 +719,15 @@ mod tests {
     fn test_render_call_limits() {
         let rows: Vec<Item> = (0..8)
             .map(|i| {
-                item("action", i, &format!("事情{i}"), Some("o"), Some(NOW - 3600), "open", None)
+                item(
+                    "action",
+                    i,
+                    &format!("事情{i}"),
+                    Some("o"),
+                    Some(NOW - 3600),
+                    "open",
+                    None,
+                )
             })
             .collect();
         let call = render_call("张三", &rows, NOW);
