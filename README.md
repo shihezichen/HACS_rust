@@ -1,99 +1,142 @@
 # HACS_rust
 
-**HACS（Human-Agent Communication System）的 Rust 重写。** 目标：把 Python 版的长驻服务逐件换成
-Rust，**显著降低每进程内存占用**，同时保持**线级兼容**（同端口 / 同路径 / 同 JSON / 同鉴权头 /
-同 NATS 主题），从而可以**逐台、逐服务替换并可随时回退**。
+**HACS（Human-Agent Communication System）的 Rust 实现。**
+HACS 是一个多 Agent 协作系统：成员（人 + Agent）通过群聊、任务、会议（圆桌）、共享黑板协作，
+长驻服务负责消息投递、协作域逻辑与 Web 呈现。本仓库是它的 Rust 侧实现——与
+[Python 原版](https://github.com/shihezichen/HACS) **线级兼容**（同端口 / 同 HTTP 路径与状态码 /
+同 JSON 信封 / 同鉴权头 / 同 NATS 主题），可作为原版的逐进程替换品，单进程内存降至原版的
+**1/3 ～ 1/18**。
 
-- 对应 Python 原件：<https://github.com/shihezichen/HACS>（分层结构 / 端口表 / 契约以它为真源）。
-- 分支：`main`。
-- **接手先读**：**[`docs/HANDOFF.md`](docs/HANDOFF.md)** —— 交接文档（进度 / 环境与工具链坑 /
-  关键决定 / 已知偏差 / 下一步 / 替换流程 / 复跑命令）。
+## 为什么是 Rust
 
-## 三条工程口径
+HACS 由十几个常驻服务组成，Python 版单进程内存 20–40 MB；服务数量 × 节点数量一乘，常驻内存成为
+部署的主要成本。Rust 版以「**线级兼容、逐服务替换、随时回退**」为约束重写全部服务，
+实测内存收益（Max RSS，Python vs Rust）：
 
-1. **分层结构镜像**，且**编译期固化**：Python 版的「依赖方向」是运行时门禁（`tools/check_layers.py`）；
-   在 Rust 里它就是 `Cargo.toml` 的依赖图 —— **一个 crate 只能引用自己在 `Cargo.toml` 里声明过的层**，
-   反向依赖根本编译不过。见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
-2. **线级兼容**：同端口、同 HTTP 路径与状态码、同 JSON 字段与格式、同鉴权头、同 NATS 主题与信封。
-   连响应形态也尽量对齐 Python 的 `http.server`（HTTP/1.0 状态行 / `Server:`+`Date:` 头序 /
-   `json.dumps` 的 `, ` `: ` 分隔符）—— 见 [`docs/PARITY.md`](docs/PARITY.md)。
-3. **渐进式 strangler**：Rust 与 Python 并存，逐服务替换、逐台节点切换，每个服务可对照 Python 版
-   做等价验证。见 [`docs/MIGRATION.md`](docs/MIGRATION.md) 与 README 的「当前状态」。
+| 服务 | 收益 | | 服务 | 收益 |
+|---|---|---|---|---|
+| group_watch | **18.5×** | | roundtable | 8.5× |
+| shared_content | 9.7× | | gen_nats_conf | 9.3× |
+| serve | 10.0× | | post_group | 8.9× |
+| blackboard_view | 9.2× | | team | 9.9× |
+| blackboard_svc | 7.3× | | nodelet | 3.4× |
 
-## 目录
+收益的直接来源是下面的技术选型：无框架、无异步运行时、零外部密码学/HTTP 依赖。
 
-| 路径 | 层 | 对应 Python | 状态 |
-|---|---|---|---|
-| `crates/hacs-x-identity/` | `X` 横切 | `hub/x/view_auth.py` | ✅ 已迁移（含 scrypt/sha256 自实现） |
-| `crates/hacs-l0-host/` | `L0` 平台 | `node/l0_host/*` | ✅ 已迁移 |
-| `crates/hacs-l1-transport/` | `L1` 通信 | `node/l1_transport/*` · `hub/l1_relay/*` | ✅ 已迁移 |
-| `crates/hacs-l2-adapter/` | `L2` 适配 | `node/l2_adapter/*` · `hub/l2_adapter/*` | ✅ 已迁移 |
-| `crates/hacs-l3-domain/` | `L3` 协作域 | `hub/l3_domain/*` | ✅ 已迁移 |
-| `crates/hacs-l4-experience/` | `L4` 呈现 | `hub/l4_experience/*` | ✅ 已迁移（前端资产内嵌 serve） |
-| `crates/hacs-c/` | `C` 组合根 | `node/c/*` · `hub/l4_experience/serve.py` | ✅ 已迁移（全部 [[bin]]） |
-| `scripts/dev-env.ps1` | — | — | Windows 开发环境准备 |
+## 架构
 
-依赖方向（编译期事实）：`hacs-c → L4 → L3 → L2 → L1 → L0`，`hacs-x-identity` 可被任意层引用。
+### 分层模型
 
-### 已迁移的件（L0 / L1）
+系统分六层，外加一个横切层；Rust 侧每层是一个 crate：
 
-| Rust 模块 | Python 原件 | 说明 |
-|---|---|---|
-| `hacs-l0-host::node_paths` | `node_paths.py` | **本机**宿主默认值唯一出处（env 优先 > 平台惯例） |
-| `hacs-l0-host::node_profile` | `node_profile.py` | 节点档案：目标主机 / 宿主真源 / **只读探针** / 协作域地址 |
-| `hacs-l0-host::member_roster` | `member_roster.py` | 成员名册档案（纯数据 + 纯查询） |
-| `hacs-l1-transport::nats_client` | `nats_client.py` | 极简 NATS 文本协议客户端（多地址故障转移） |
-| `hacs-l1-transport::web_gateway` | `web_gateway.py` | HTTP 入口件：路由 / JSON 信封 / 前置与鉴权钩子 |
-| `hacs-l1-transport::http_client` | （Python 侧是 `urllib.request`） | 极简 HTTP/1.0 客户端（远端水位回退用） |
-| `hacs-l2-adapter::pg_literals` | `hub/l2_adapter/pg_literals.py` | pgvector 字面量与时间归一（含 Python 风格 `repr(float)`） |
-| `hacs-l2-adapter::agent_usage` | `node/l2_adapter/agent_usage.py` | 上下文水位真源（后端分派 / 分母链 / 远端回退三层护栏） |
-| `hacs-l2-adapter::ctx_watermark` | `node/l2_adapter/ctx_watermark.py` | 水位薄壳（对外入口） |
-| `hacs-l2-adapter::agent_model` | `hub/l2_adapter/agent_model.py` | 模型执行器适配（ssh 命令行是契约 / 子进程带超时 / 输出解析）+ Agent 展示名 |
-| `hacs-x-identity::redact` | `hub/x/view_auth.py::safe_err` | 错误文本脱敏（抹 DSN 口令再截断 400 字符） |
-
-## 跑法
-
-> 本机（Windows）没有 MSVC 构建工具，用 **GNU host 工具链**（MinGW 链接器）。先过一次环境脚本：
-
-```powershell
-. .\scripts\dev-env.ps1          # 把 cargo + MinGW 放上 PATH，必要时把 target 挪到 ASCII 路径
-cargo build
-cargo test
-cargo clippy --all-targets
+```
+C 组合根 hacs-c          进程入口装配：每个常驻服务/CLI 是一个 [[bin]]，只做装配与注入
+ ├── L4 呈现 hacs-l4-experience      静态壳同源托管 / 反向代理 / 鉴权跳转
+ ├── L3 协作域 hacs-l3-domain        群聊 / 任务 / 圆桌会议 / 黑板 / 共享内容（业务语义层）
+ ├── L2 适配 hacs-l2-adapter         Agent 差异唯一落脚点（模型执行器 / 上下文水位 / pg 字面量）
+ ├── L1 通信 hacs-l1-transport       投信封 / 保投到 / 不重复 / 成员入网控制面（无业务语义）
+ └── L0 平台 hacs-l0-host            宿主事实唯一出处（路径 / 节点档案 / 名册 / 只读探针）
+ X 横切  hacs-x-identity            身份与授权（scrypt 会话）/ 错误脱敏；可被任意层引用
 ```
 
-Linux 节点上（`lobster` / `top001` / `quantum`）直接 `cargo build --release`，无需上面的脚本。
+**依赖方向是编译期事实**：各层 crate 的 `Cargo.toml` 只声明自己允许依赖的层，
+「L3 反向引用 C」这类违规根本编译不过——Python 版需要运行时门禁脚本做的事，Rust 版交给编译器。
+`hacs-c` 是唯一声明了全部层的 crate。
 
-### 依赖（刻意最小）
+### L0 铁律（贯穿全系统的纪律）
 
-| crate | 用途 | 备注 |
+- **只读**：宿主探针一律以 SQLite `mode=ro` 打开、用完即关；不建目录、不写状态。
+- **不编造**：没配置 / 文件不在 / 记录不在 → `None` 或空；真出错原样抛，绝不把「打不开」变成「没有数据」。
+- **传输不含语义**：L1 的网关不出现业务词，NATS 客户端不认识群聊/会议；语义由调用方注入。
+- **不泄密**：凭据只走 stdin / 文件，日志与探针输出中只允许 `{"present":bool,"len":int}` 形态，出口机械复核。
+
+## 技术选型（刻意最小依赖）
+
+核心第三方依赖只有三个：
+
+| crate | 用途 |
+|---|---|
+| `serde_json`（`preserve_order`） | JSON 编解码；自定义 Formatter 逐字节对齐 Python `json.dumps` 的 `, ` `: ` 分隔符与键序 |
+| `rusqlite`（`bundled`） | 静态编译 SQLite：L0 只读探针读宿主 state.db |
+| `postgres` 0.19 | 同步 PostgreSQL 客户端（chat/blackboard/task 等服务的存储） |
+
+**明确不引的，以及替代实现**（全部自写、逐条对齐 Python 行为、有等价测试钉死）：
+
+| 常规做法 | 本项目 | 理由 |
 |---|---|---|
-| `rusqlite`（`bundled`） | L0 只读探针读宿主 Hermes `state.db` | 静态编译 SQLite，不依赖系统库 |
-| `serde_json`（`preserve_order`） | JSON 编解码 | `preserve_order` 保 Python dict 的键序 |
-| `serde` | 自定义 Serializer 对齐 Python 的 `, ` `: ` 分隔符 | |
+| axum / hyper / tokio | 手写 HTTP/1.0 socket（线程 + 阻塞 I/O） | 对齐 Python `http.server` 的状态行/头序/信封形状；省掉框架与运行时内存 |
+| reqwest | 手写 HTTP 客户端（`http_client.rs`） | 同上 |
+| async-nats | 手写 NATS 文本协议客户端（多地址故障转移） | 协议极简，客户端 <500 行 |
+| regex | 每条 Python 正则手写对应扫描器 | 见 `tools/scan_secrets.rs` 等 |
+| sha2 / hmac / scrypt crate | 自实现 sha256 / sha1 / hmac / scrypt / base64（md5 以 sha256[:8] 替代，仅自观测） | 逐字节与 hashlib 对齐（含 scrypt 双端序修复） |
+| uuid crate | 手写 uuid5（SHA1 命名空间版） | 与 Python `uuid.uuid5` 逐字节一致 |
+| chrono | 自实现 civil 历法 + 时区归一（支持 `+08:00`） | 只用到日期运算与 ISO8601 格式化 |
+| fastembed / onnxruntime | embedder 骨架 + 粘性失败（PARITY 50） | 不为可选功能引入 ONNX 运行时 |
 
-**不引 HTTP 框架 / 异步运行时**：L1 的 HTTP 面是手写 socket（对齐 `http.server` 的行为与响应形态），
-NATS 客户端是自己实现的文本协议。零框架依赖直接服务于「减少内存占用」这个目标。
+这一整套「零框架、零运行时、自实现密码学」直接服务于内存目标，也把攻击面压到最小。
 
-## 当前状态
+## 仓库结构
 
-**P0–P5 移植收官（2026-10）**：Python 版全部可移植件已迁到 Rust，262 个等价测试全绿，
-偏差逐条登记 [`docs/PARITY.md`](docs/PARITY.md)（57 条）。
+```
+crates/
+  hacs-x-identity/      X 横切：view_auth（scrypt 会话/密级）、错误脱敏、sha256/hmac/scrypt
+  hacs-l0-host/         L0：node_paths · node_profile · member_roster · nodelet（节点守护纯逻辑）
+  hacs-l1-transport/    L1：nats_client · web_gateway · http_client · teamd · team_call/broadcast/roster
+                        · team_group · a2a_edge/a2a_call · group_watch_pending
+  hacs-l2-adapter/      L2：pg_literals · agent_usage · ctx_watermark · agent_model · cli_backend
+  hacs-l3-domain/       L3：task_svc · chat_svc · blackboard_svc · blackboard_view · roundtable
+                        · rt_remind · shared_content · session_ctx_archiver · embedder
+  hacs-l4-experience/   L4：静态托管 / 反代
+  hacs-c/               C 组合根：23 个 [[bin]]（每个服务/CLI 一个进程入口）+ 前端资产内嵌
+tools/scan_secrets.rs   提交前密钥扫描硬门禁（独立 rustc 单文件）
+docs/                   HANDOFF（交接/复跑）· ARCHITECTURE · MIGRATION · PARITY（57 条偏差登记）
+```
 
-- ✅ **L0**（`node_paths` · `node_profile` · `member_roster` · `nodelet`）。
-- ✅ **L1**（`nats_client` · `web_gateway` · `http_client` · `teamd` · `team_call/broadcast/roster` ·
-  `a2a_edge/a2a_call` 等）。
-- ✅ **L2**（`pg_literals` · `agent_usage` · `ctx_watermark` · `agent_model` · `cli_backend`）。
-- ✅ **X 横切**（`view_auth` 含自实现 scrypt/sha1/base64）。
-- ✅ **L3 全部**：`task_svc` · `chat_svc` · `blackboard_svc` · `blackboard_view` · `roundtable` ·
-  `rt_remind` · `shared_content` · `session_ctx_archiver` · `group_watch_pending` · `team_group` ·
-  `embedder`（lib-only，骨架+粘性失败）。
-- ✅ **L4 + C + tools**：`serve`（前端资产内嵌）· `nodelet` bin · `team` · `post_group` ·
-  `gen_nats_conf` · `roster_creds_mirror` · `scan_secrets` 门禁。
-- 内存收益（Max RSS，Python vs Rust）：3.4×（nodelet）– 18.5×（group_watch），
-  重服务普遍 7×–10×（blackboard_svc 7.3×、chat 链路同量级、roundtable 8.5×）。
-- 已知不移植：`check_layers` / `check_layers_reconcile` / `gen_arch_doc`（分层已由 Cargo 依赖图
-  编译期固化，运行时门禁地位消失）；`backfill_embeddings`（依赖 fastembed/onnxruntime，按
-  PARITY 50 口径不引，embedder 以骨架对齐）。
-- 替换流程与逐服务回退方式见 [`docs/MIGRATION.md`](docs/MIGRATION.md) 与
-  [`docs/HANDOFF.md`](docs/HANDOFF.md)。
+### 常驻服务端口表
+
+| bin | 端口 | 职责 |
+|---|---|---|
+| `chat_svc` | 9980 | 群聊服务（PostgreSQL 存储，错误信封 `{"ok":false,"error":{"code","message"}}`） |
+| `blackboard_svc` | 9940 | 共享黑板（PostgreSQL，平信封契约，`--peers-json` 认证） |
+| `blackboard_view` | 9941 | 黑板 Web 视图（HTML 资产 `include_str!` 内嵌） |
+| `task_svc` | 9981 | 任务服务 |
+| `a2a_svc` | 9920 | Agent-to-Agent 边缘 |
+| `teamd` | 9960 | 成员入网控制面（NATS `a2a.v1.req.<member>`） |
+| `nodelet` | 9971 | 节点守护探针（只读，键序冻结输出） |
+| `serve` | 自定 | L4 前端静态 + `/api/*` 反代 + `/login` |
+| `cli_backend` | 9970 | CLI 后端 |
+
+其余 CLI（`team` / `post_group` / `roundtable` / `rt_remind` / `shared_content` / `session_ctx_archiver` /
+`group_watch` / `gen_nats_conf` / `roster_creds_mirror` / `a2a_call` / `team_call` / `team_broadcast` /
+`team_roster`）为一次性运维/客户端命令。
+
+## 构建与测试
+
+Linux（推荐）：
+
+```bash
+cargo build --release
+cargo test          # 262 个等价测试全绿
+```
+
+Windows 用 GNU host 工具链（本机无 MSVC）：先 `. .\scripts\dev-env.ps1`，再同上。
+
+等价测试覆盖：网关线上字节形态、NATS 完整握手、uuid5 逐字节一致、Python 风格浮点 `repr`、
+四舍六入五成双、scrypt 与 hashlib 逐字节一致、探针只读性（写不进去断言）、脱敏正则口径等。
+
+## 与 Python 版的关系
+
+- **真源**：分层结构 / 端口表 / 契约以 [Python 版](https://github.com/shihezichen/HACS) 为准。
+- **PARITY**：所有已知偏差逐条登记在 [`docs/PARITY.md`](docs/PARITY.md)（57 条），不消红、如实记账；
+  例如 md5 未实现（nodelet 指纹改 sha256[:8]，仅自观测不跨实现比对）、embedder 骨架化。
+- **替换与回退**：逐服务把 systemd 单元 / 计划任务的 `ExecStart` 指向 Rust 二进制即可切换；
+  行为对不上改回 Python 件即回退。流程见 [`docs/MIGRATION.md`](docs/MIGRATION.md)。
+- **不移植件**：`check_layers` / `check_layers_reconcile` / `gen_arch_doc`（分层已由 Cargo 依赖图
+  编译期固化，运行时门禁地位消失）；`backfill_embeddings`（依赖 ONNX，见 PARITY 50）。
+
+## 文档
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) —— 分层 ↔ crate 映射、依赖方向、关键实现决定
+- [`docs/PARITY.md`](docs/PARITY.md) —— 57 条与 Python 版的等价性记录与偏差登记
+- [`docs/MIGRATION.md`](docs/MIGRATION.md) —— 逐服务替换流程与回退
+- [`docs/HANDOFF.md`](docs/HANDOFF.md) —— 交接文档：环境坑、关键决定、复跑命令
