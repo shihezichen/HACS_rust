@@ -20,6 +20,7 @@ pub mod blackboard_view;
 pub mod chat_svc;
 pub mod rt_remind;
 pub mod session_ctx_archiver;
+pub mod shared_content;
 pub mod task_svc;
 pub mod task_svc_chat;
 pub mod team_group;

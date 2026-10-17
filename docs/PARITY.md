@@ -208,3 +208,13 @@
 
 45. session_ctx_archiver：Python `str.lines()`/`re` 全部手写对应物（API_RE/编号切分/BLOCKED_BY_RE/resume 指针剥离）；`_clip`/`_clean_line` 按 Python 字符语义；`[\W_]` 长度统计用 Unicode alphanumeric。agent.log last_ts 取行首 19 字符。one-shot CLI，内存对比 Py 22,780 kB vs Rust release 4,736 kB（4.8×）。
 46. session_ctx_archiver：群消息/memo PATCH 走 L1 手写 http_client（Connection: close，不跟重定向）；memo PATCH 409 重试 3 次 × 400ms 间隔 = Python；state.db 用 rusqlite 只读模式（=sqlite3 uri mode=ro）。
+
+47. shared_content：Rust 侧 embedder 未移植，`compute_embedding` 恒 None（写库向量 NULL、
+    `--semantic` 降级关键词，mode 如实报 keyword）= Python 模型不可用路径；接 embedder 后
+    (`$N::text::vector` 路径已就绪) 即对齐。
+48. shared_content bin：`--sqlite` 替身后端未实现（Python SqliteStore 为测试替身；Rust 单测
+    用 MemoryStore 覆盖同一 Store trait），给明确报错；`--no-embed` 旗标接受但为 no-op（同上）。
+    PgStore 全文本绑定 + `NULLIF($N::text,'')` 处理空串→NULL（timestamptz/jsonb/vector 三类
+    cast 前 ::text 双跳，沿 rt_remind 教训）；数值参数按 i64/f64 二进制绑定。
+    内存对比（一次性 CLI，`/usr/bin/time -v` Max RSS，tasks --limit 50）：Python 28,584 kB
+    vs Rust release 2,944 kB —— **降至 Python 的 ~10.3%（省 ~89.7%）**。
