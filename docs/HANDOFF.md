@@ -29,7 +29,7 @@ P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
 P3  L3 重服务（收益最大）  ✅ task_svc + chat_svc + blackboard_svc + blackboard_view 全落地
-P4  L3 其余件 + X 其余面  🟡 进行中：team_group ✅ / rt_remind ✅ / session_ctx_archiver ✅ / shared_content ✅ / group_watch_pending ✅；余 embedder、roundtable、node/c 其余件、l4_experience/serve.py、gen_nats_conf.py、tools
+P4  L3 其余件 + X 其余面  🟡 进行中：team_group ✅ / rt_remind ✅ / session_ctx_archiver ✅ / shared_content ✅ / group_watch_pending ✅ / embedder ✅（lib-only，见 PARITY 50）；余 roundtable、node/c 其余件、l4_experience/serve.py、gen_nats_conf.py、tools
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
 ```
 

@@ -228,3 +228,10 @@
     1,408 kB —— **降至 Python 的 ~5.4%（省 ~94.6%）**。回复写回链路（deliver→reply→
     post_reply）由 L3 单测 FakeDlv 覆盖；真 NATS 集成路径复用 team_group/broadcast
     已验证的 call_one 实现（本机无 nats-server，登记限制同 PARITY 前件）。
+
+50. embedder：Rust 遵守零外部依赖铁律不引 fastembed/onnxruntime —— load 恒定粘性失败
+    （last_error="fastembed 导入失败：Rust 侧未内嵌 ONNX 运行时"），embed_texts 恒 None、
+    空列表返回 [] 不触发加载、status() 不触发加载、reset() 丢弃失败标记：行为=Python
+    "没装 fastembed" 路径的逐条对齐；配置解析（BB_EMBED_MODEL/BB_EMBED_DIM 非法退默认）
+    与 ERROR_MAX=200 截断一致。接模型后只需实现 load_inner()（粘性/单例语义已就位）。
+    Python 版无独立入口，Rust 同为 lib-only，无内存对比项。

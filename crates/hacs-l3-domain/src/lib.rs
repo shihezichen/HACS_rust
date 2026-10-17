@@ -18,6 +18,7 @@ pub const MIGRATION_STATUS: &str = "pending";
 pub mod blackboard_svc;
 pub mod blackboard_view;
 pub mod chat_svc;
+pub mod embedder;
 pub mod group_watch_pending;
 pub mod rt_remind;
 pub mod session_ctx_archiver;
