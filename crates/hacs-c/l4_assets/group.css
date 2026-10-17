@@ -1,0 +1,408 @@
+  :root{--bg:#0f1115;--panel:#171a21;--line:#272b35;--fg:#e6e8ee;--dim:#8b93a7;
+        --accent:#4c8dff;--ok:#37c07a;--warn:#e8a33d;--err:#e5534b;--me:#1d2430;
+        /* 三段式：顶 56 / 中 自适应(唯一滚动) / 底 64 */
+        --hx-top-h:56px;--hx-bottom-h:64px;
+        /* #418-2/3：左栏宽度（JS 可写 --hx-aside-w，折叠时写 0px）+ 分隔条宽（常量） */
+        --hx-aside-w:290px;--hx-split-w:10px;--hx-sb:0px}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:14px/1.55 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--fg);
+       display:flex;flex-direction:column;overflow:hidden}   /* 页面本体永不滚动 */
+  header{flex:0 0 auto;height:var(--hx-top-h);min-height:var(--hx-top-h);
+         display:flex;align-items:center;gap:12px;padding:0 14px;overflow:hidden;
+         border-bottom:1px solid var(--line);background:var(--panel);position:relative;z-index:5}
+  header h1{font-size:15px;margin:0;font-weight:600}
+  #who{color:var(--dim);font-size:12px}
+  #who b{color:var(--ok)}
+  /* #presence：顶部 Agent 在线态条（在线绿点 / 离线灰显 / 未知黄点） */
+  #agentbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:5px 14px;
+            min-height:30px;border-bottom:1px solid var(--line);background:#12151d;
+            overflow:hidden;font-size:12px}
+  #agentbar .abt{color:var(--dim);font-size:10px;letter-spacing:.8px;flex:0 0 auto}
+  #agentbar .ablist{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;flex:1 1 auto}
+  #agentbar .absum{color:var(--dim);font-size:10px;margin-left:2px;flex:0 0 auto}
+  .abchip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;
+          border:1px solid var(--line);background:#1a1e28;white-space:nowrap}
+  .abchip .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+  .abchip em{font-style:normal;font-size:10px;color:var(--dim)}
+  .abchip.on{border-color:#245a3c}
+  .abchip.on .dot{background:var(--ok);box-shadow:0 0 6px rgba(55,192,122,.75)}
+  .abchip.on em{color:var(--ok)}
+  .abchip.off{opacity:.6;border-color:#3a2b2b;background:#1b1a1e}
+  .abchip.off .dot{background:#5d6577}
+  .abchip.off em{color:#9a7474}
+  .abchip.unk .dot{background:var(--warn)}
+  .spacer{flex:1}
+  main{flex:1 1 auto;min-height:0;display:grid;
+       grid-template-columns:var(--hx-aside-w) var(--hx-split-w) 1fr;
+       /* #442：中段拆两行 —— 消息区 1fr（唯一滚动区，不变）+ 底栏 auto；
+          左栏与分隔条跨这两行，所以左栏元素本体一直画到窗口可视底，
+          底栏左侧那一段不再靠 #composer::before 补色（旧做法依赖画序，会在
+          底栏高度/画序变化时重新露出底缝）。 */
+       grid-template-rows:1fr auto;overflow:hidden;
+       transition:grid-template-columns .18s ease-out}
+  aside{grid-column:1;grid-row:1 / span 2;border-right:1px solid var(--line);padding:10px;overflow:hidden;background:#141721;
+        /* #432-3：左栏改成 flex 列 —— 两个 TAB 页共用这一栏，只有「任务队列」列表内部滚动，
+           页面仍不产生第二个滚动条（#417 的约束不变）。 */
+        display:flex;flex-direction:column;min-height:0;
+        transition:padding .18s ease-out}
+  /* #418-3 折叠态：左栏占 0 宽，聊天区 + 输入区吃满整页 */
+  html.aside-collapsed aside{padding:0;border-right:0}
+  #asidehead{display:flex;align-items:center;gap:6px;margin:2px 0 8px;flex:0 0 auto}
+  #asidehead .ah-t{color:var(--dim);font-size:12px;flex:1 1 auto;min-width:0;
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #asidehead button{padding:2px 8px;font-size:11px;white-space:nowrap;flex:0 0 auto}
+  html.aside-collapsed #asidehead{display:none}
+  /* #418-3 拖拽分隔条：左栏宽度左右可拉（折叠态仍可往右拉回展开） */
+  #split{grid-column:2;grid-row:1 / span 2;position:relative;width:var(--hx-split-w);cursor:col-resize;background:#141721;
+         border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+         user-select:none;-webkit-user-select:none}
+  #split:hover,#split.drag{background:#232838}
+  html.aside-collapsed #split{background:#1a1f2b}
+  #splitchev{width:100%;height:52px;padding:0;border:0;border-radius:0;background:transparent;
+             color:var(--dim);font-size:9px;line-height:1;cursor:pointer}
+  #splitchev:hover{color:var(--fg)}
+  section{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+  .gitem{padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;
+         cursor:pointer;background:#1a1e28}
+  .gitem:hover{border-color:#3a4358}
+  .gitem.on{border-color:var(--accent);background:var(--me)}
+  .gitem .t{font-weight:600;font-size:13px;word-break:break-all}
+  .gitem .m{color:var(--dim);font-size:11px;margin-top:2px;word-break:break-all}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:99px;
+       border:1px solid var(--line);color:var(--dim);margin-left:6px}
+  /* 群列表不产生第二个滚动条：每行单行省略，行高压到最小 */
+  aside .gitem .t, aside .gitem .m{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag.open{color:var(--ok);border-color:#245a3c}
+  .tag.archived{color:var(--warn);border-color:#5a4624}
+  #head{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;
+        align-items:center;flex-wrap:wrap;background:#141721}
+  #head .title{font-weight:600}
+  /* 中段：唯一滚动容器 */
+  /* #460c：padding-top 归零、改用 ::before 占位 —— 否则组头 sticky 到顶时
+     会在 top:0 处露出 12px 的空白（padding-top 是滚动容器的内容区起点）*/
+  #log{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+       -webkit-overflow-scrolling:touch;padding:0 14px 12px}
+  #log::before{content:"";display:block;height:12px}
+  .msg{padding:8px 10px;border-radius:8px;margin-bottom:8px;background:#1a1e28;
+       border:1px solid var(--line)}
+  .msg.mine{background:var(--me);border-color:#2b3648}
+  .msg .h{font-size:11px;color:var(--dim);margin-bottom:3px}
+  .msg .h b{color:var(--accent)}
+  .msg .h .seq{color:#5d6577}
+  .msg .b{white-space:pre-wrap;word-break:break-word}
+  .msg.need{border-color:#6b4a12;box-shadow:inset 3px 0 0 var(--warn)}
+  /* 上下文水位（2026-09-24）：服务端按真源渲染，非 Agent 自述 */
+  .ctxwm{margin-top:2px;color:#6b7488;font-size:11px;font-variant-numeric:tabular-nums}
+  #pending{padding:6px 14px;border-top:1px solid var(--line);color:var(--warn);font-size:12px;
+           background:#1b1710;display:none;cursor:pointer;user-select:none}
+  #pending:hover{background:#241d12}
+  #pending:active{transform:scale(.997)}
+  #pending .pj{color:#ffd08a;font-weight:600;text-decoration:underline;text-underline-offset:2px}
+  /* #460e: loading / empty */
+  #log .loading{color:var(--dim);font-size:12px;padding:14px 4px}
+  #log .loading .spin{display:inline-block;width:11px;height:11px;margin-right:7px;border:2px solid #3a4358;border-top-color:var(--accent);border-radius:50%;vertical-align:-1px;animation:lspin .8s linear infinite}
+  @keyframes lspin{to{transform:rotate(360deg)}}
+  #log .emptybox{color:var(--dim);font-size:13px;padding:26px 4px;text-align:center}
+  #log .emptybox .ic{font-size:22px;display:block;margin-bottom:8px;opacity:.6}
+  /* 底段：默认 64px（= 下限），内部横向排布，不产生第二个滚动条 */
+  /* #347-0②：高度不再钉死 64px —— 跟随被拖高的 textarea 一起长高，下限仍是 64px */
+  #composer{grid-column:3;grid-row:2;height:auto;min-height:var(--hx-bottom-h);
+            display:flex;align-items:center;gap:8px;
+            /* #418-2：左内边距 = 左栏 + 分隔条 + 14px；右内边距 = 14px + 消息区滚动条宽
+               —— 输入区左右边界与上方消息区（#log 内容盒）对齐 */
+            /* #442：底栏已在左栏右侧那一格，左内边距不再需要「左栏 + 分隔条」补偿，
+               直接写 14px —— 与消息区（#log）内容盒左边界严格对齐。
+               #452-2：右内边距由「14px + 消息区滚动条宽（--hx-sb）」改成 0 ——
+               输入区（textarea）右边界一路顶到窗口右边缘（实测右间隙 93px -> 0px）；
+               「发送」按钮不再占位（改成绝对定位塞进输入框内部），右侧不再有留白。
+               --hx-sb 仍由 composerSyncSb() 维护，#log 侧不受影响。 */
+            padding:8px 0 8px 14px;
+            transition:padding-left .18s ease-out;
+            border-top:1px solid var(--line);background:var(--panel);position:relative;z-index:6}
+  /* #442：原来这里用 #composer::before/::after 给底栏左侧「补」左栏 / 分隔条的底色，
+     属于依赖画序的补丁（左栏元素本体只到 y=736，露出 64px 底带时才需要）。
+     现在左栏 / 分隔条本身跨到底栏那一行，底色与右边界线由本体绘制，
+     伪元素整块删除 —— 底缝在结构上不再可能出现。 */
+  /* #452-2：底栏这一行改成「包裹层 + 绝对定位按钮」——
+     .row 作为定位上下文（position:relative），textarea 是行内唯一的在流子元素、
+     自带 flex:1 所以吃满整个宽度；「发送」按钮脱离文档流，贴 textarea 右下角内 8px。
+     #432-1 的用意（按钮不浮在竖直中线、不出现 41px 底边差）仍然成立：
+     按钮现在锚在输入框右下角，位置由输入框高度决定，拖高 textarea 时按钮跟着走。
+     textarea 加右侧 padding（#452-2c）给按钮让出宽度，文字不会被压住。 */
+  #composer .row{flex:1 1 auto;min-width:0;align-items:flex-end;position:relative}
+  #composer .row > #send{position:absolute;right:8px;bottom:8px;z-index:2;
+                         padding:2px 9px;font-size:12px;line-height:1.35}
+  /* #432-1：这一行只有 textarea + 「发送」按钮，原来 align-items:center ——
+     输入框被拖高（#347-0② 可拖）后按钮浮在竖直中线，两者底边差 41px；改 flex-end 后
+     两个盒子的 margin 盒底边落在同一条像素线上（按钮无 margin，textarea 也没有）。 */
+  /* #438-1：「发送」按钮右边那排成员快捷标签（@所有人 / @<human-id> / @hermes / @openclaw-nb）
+     整排不再渲染 —— 发送按钮右边不再有 chip 条，底栏只剩 textarea + 「发送」。
+     双保险：① JS renderMentions() 不再建 chip（#mentions 恒为空）；② 这里 display:none，
+     元素留在 DOM 里但 0×0、无文本、不参与 flex 布局，所以 #432-1 的
+     「发送按钮 = textarea 底边同一条像素线（0.00px）」不受影响。
+     正文里手打 @xxx 与输入框联想（#ac）照旧可用。 */
+  #composer > .mentions{display:none !important}
+  #composer > .mentions .chip{flex:0 0 auto}
+  /* #434-1：「发送」按钮右边那行说明文字删掉（内容与输入框 placeholder 重复，白占右下角）。
+     #hint 元素保留在 DOM（updHint() 仍往里写），但一律不渲染 —— 按钮右边不再有文字。 */
+  #composer > #hint{display:none !important}
+  /* 输入 @ 时的联想浮层：只列本群能对话的成员 */
+  #ac{position:absolute;left:14px;bottom:100%;margin-bottom:-4px;min-width:220px;max-height:230px;overflow:auto;
+      background:#1c232f;border:1px solid var(--line);border-radius:10px;padding:5px;box-shadow:0 10px 26px rgba(0,0,0,.45);display:none;z-index:40}
+  #ac.on{display:block}
+  #ac .it{padding:6px 10px;border-radius:7px;font-size:13px;cursor:pointer;color:var(--fg);white-space:nowrap}
+  #ac .it .sub{color:var(--muted);font-size:11px;margin-left:6px}
+  #ac .it.sel{background:var(--accent);color:#fff}
+  #ac .it.sel .sub{color:#e6ecf5}
+  .row{display:flex;gap:8px;align-items:flex-start}
+  /* #347-0②：输入框高度可拖拽（垂直方向，带上下限）——
+     min 38px（= 原默认高，默认外观不变）/ max 60vh；超出时输入框内部滚动，不撑破布局。
+     resize:vertical 与 #438-2 的高度内存态（localStorage group.text_h）一律不变。
+     #452-2c：右侧内边距 8px -> 76px，给塞在右下角的「发送」按钮让出宽度
+     （按钮右侧内缩 8px + 约 44px 宽 + 8px 间隔），输入文字不会跑到按钮底下。 */
+  textarea{flex:1;height:38px;min-height:38px;max-height:60vh;resize:vertical;overflow:auto;
+           line-height:1.4;background:#0f1218;color:var(--fg);
+           border:1px solid var(--line);border-radius:8px;padding:8px 76px 8px 8px;
+           font:inherit}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;
+         font:inherit;cursor:pointer}
+  button.ghost{background:#232838;color:var(--fg)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .mentions{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);
+        background:#1a1e28;cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.all{border-color:#4a5a7a}
+  /* #438-3：消息区上沿的「只看某发言者」过滤条。
+     独立类名 .fchip（不与底栏 .chip 混用），未勾选任何人 = 全显；没人可筛时整条 hidden。 */
+  #msgfilter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+             padding:6px 14px;border-bottom:1px solid var(--line);background:#141721}
+  #msgfilter[hidden]{display:none}
+  #msgfilter .flabel{color:var(--dim);font-size:11px;user-select:none}
+  #msgfilter .fchip{font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);
+                    background:#1a1e28;cursor:pointer;user-select:none;color:var(--fg)}
+  #msgfilter .fchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #msgfilter .fcount{color:var(--dim);font-size:11px;margin-left:auto;user-select:none}
+  /* ===== #460 2026-09-24 刚哥三点需求（1/2/3）=====
+     ① 主题分组：同一话题的来回交流归到一组，组头可折叠
+     ② 接收者高亮：受众（→ 后面）单独上色，与蓝色加粗发言人一眼区分
+     ③ Markdown 渲染：见 md.js（含内联/块级数学与代码块） */
+  /* ① 主题分组容器 */
+  .tgrp{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#141822}
+  .tgrp.cur{border-color:#2f4a72}
+  /* #460c 需求 1：组头**吸顶** —— 滚到组内深处时，组名/折叠钮仍固定在 #log 顶部，
+     随时知道原问题是什么、随时可折叠。
+     ⚠️ 父级不能有 overflow:hidden（会截断 sticky），所以圆角靠 .tgh 自己画：
+        组头默认带左右圆角；展开时组内消息自带底色，视觉上仍是一个整块。 */
+  .tgh{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;
+       background:#1b2130;border-bottom:1px solid var(--line);user-select:none;
+       position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0;
+       box-shadow:0 1px 0 rgba(0,0,0,.35)}
+  .tgrp.closed .tgh{border-radius:9px}
+  .tgh:hover{background:#202736}
+  .tgrp.closed .tgh{border-bottom-color:transparent}
+  .tgh .tgcar{color:var(--dim);font-size:10px;width:11px;flex:0 0 auto;transition:transform .12s}
+  .tgrp.closed .tgh .tgcar{transform:rotate(-90deg)}
+  .tgh .tgt{font-weight:600;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;
+            white-space:nowrap;flex:0 1 auto}
+  .tgh .tgc{color:var(--dim);font-size:11px;flex:0 0 auto}
+  .tgh .spacer{flex:1 1 auto}
+  .tgh .tga{color:#6b7488;font-size:11px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  /* #460c 需求 2：组头也显示回应状态（等谁 / 谁已答），吸顶时一眼可见 */
+  .tgh .tgs{font-size:11px;flex:0 0 auto;white-space:nowrap;max-width:46%;overflow:hidden;
+            text-overflow:ellipsis}
+  .tgh .tgs .w{color:var(--warn)}
+  .tgh .tgs .d{color:#5fb98a}
+  .tgh .tgs .sep{color:#3a4456;padding:0 3px}
+  /* #460c 需求 2：消息级「待回应 / 已回应」分色 */
+  .pendo{font-size:11px;display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap}
+  .pendo .w{color:var(--warn)}
+  .pendo .d{color:#5fb98a}
+  .pendo .sep{color:#3a4456;padding:0 2px}
+  .tgb{padding:8px 8px 2px}
+  .tgrp.closed .tgb{display:none}
+  /* 组内消息不再自带外框，靠分组卡片包着 */
+  .tgb .msg{margin-bottom:6px;background:#1a1e28}
+  .tgb .msg.mine{background:var(--me)}
+  /* ② 接收者：青色系高亮，与发言人(--accent 蓝)明显区分 */
+  .msg .h .aud{color:#4fd1c5;font-weight:600}
+  .msg .h .aud .hl{color:#7ff0e2}
+  .msg .h .arrow{color:#3d5560;padding:0 1px}
+  .msg .h .mref.hl{color:#8fb7ee;font-weight:600;background:#22314a;border-radius:4px;padding:0 3px}
+  /* ③ Markdown 渲染体（内容已由 md.js 全程转义）*/
+  .msg .b.md{white-space:normal}
+  .msg .b.md > :first-child{margin-top:0}
+  .msg .b.md > :last-child{margin-bottom:0}
+  .msg .b.md p{margin:0 0 7px}
+  /* #460b 反馈 3：**加粗** 要更明显 —— 提亮 + 加粗 + 轻微背景/描边，暗底上一眼可见 */
+  .msg .b.md strong{color:#ffffff;font-weight:800;background:rgba(110,168,255,.16);
+                    border-radius:4px;padding:0 3px}
+  .msg .b.md em{color:#e8ddb0;font-style:italic}
+  .msg .b.md del{color:#8b93a7;text-decoration:line-through}
+  .msg .b.md h1,.msg .b.md h2,.msg .b.md h3,.msg .b.md h4,.msg .b.md h5,.msg .b.md h6
+      {margin:9px 0 5px;font-size:14px;line-height:1.4}
+  .msg .b.md ul,.msg .b.md ol{margin:0 0 7px;padding-left:20px}
+  .msg .b.md li{margin:2px 0}
+  .msg .b.md blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid #33415c;
+                        color:#aab3c7;background:#171c26;border-radius:0 6px 6px 0}
+  .msg .b.md hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+  .msg .b.md code{background:#10141c;border:1px solid #262c38;border-radius:4px;
+                  padding:1px 4px;font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:12.5px}
+  .msg .b.md pre.md-code{background:#0d1117;border:1px solid #262c38;border-radius:7px;
+                         padding:8px 10px;margin:6px 0;overflow:auto;max-height:44vh}
+  .msg .b.md pre.md-code code{background:transparent;border:0;padding:0;font-size:12.5px;line-height:1.5}
+  .msg .b.md table{border-collapse:collapse;margin:6px 0;font-size:13px}
+  .msg .b.md th,.msg .b.md td{border:1px solid var(--line);padding:3px 8px;text-align:left}
+  .msg .b.md th{background:#1d2331;font-weight:600}
+  .msg .b.md a{color:#6ea8ff}
+  .msg .b.md .md-math{font-family:"Cambria Math","Times New Roman",serif;font-style:italic;
+                      color:#e8d9a0;padding:0 1px}
+  .msg .b.md .md-mathblock{font-family:"Cambria Math","Times New Roman",serif;
+                           color:#e8d9a0;text-align:center;margin:8px auto;padding:6px 10px;
+                           background:#141a24;border:1px dashed #2b3648;border-radius:7px;
+                           overflow-x:auto;font-size:14px}
+  /* #460b 反馈 1：真 LaTeX → 原生 MathML（浏览器自己排版，支持上下标/分式/积分限/根式/希腊字母）*/
+  .msg .b.md math.md-mathml{font-size:15px;color:#f0e2b0;font-style:normal;
+                            vertical-align:middle;line-height:1.3}
+  .msg .b.md math.md-mathml[display="block"]{display:block;margin:10px auto;text-align:center;
+                            font-size:17px;padding:8px 10px;background:#141a24;
+                            border:1px solid #2b3648;border-radius:7px;overflow-x:auto}
+  .msg .b.md math.md-mathml mfrac{border-collapse:collapse}
+  /* 行内公式：强制行内排版（MathML 默认是块级/整行） */
+  .msg .b.md math.md-mathml.md-math-inline{display:inline;vertical-align:-0.15em;
+                            font-size:1.02em;padding:0 1px;background:transparent;
+                            border:0;margin:0;text-align:left}
+  /* 公式前的标签行（「块级公式：」）行内化，与紧随的公式同处一个块流，
+     避免 </p> 与块级 <math> 之间被 margin 撑开一大截 */
+  .msg .b.md .md-lab{display:block;margin:6px 0 2px;color:var(--fg)}
+  .msg .b.md .md-mathraw{font-family:Consolas,Menlo,monospace;color:#e8a33d}
+  /* #460b 反馈 2：代码块鲜明高亮（token 配色）*/
+  .msg .b.md pre.md-code{background:#0b0f17;border:1px solid #2b3648}
+  .msg .b.md pre.md-code code .tk-kw{color:#ff7bb0;font-weight:600}
+  .msg .b.md pre.md-code code .tk-str{color:#9ae66e}
+  .msg .b.md pre.md-code code .tk-num{color:#ffb86c}
+  .msg .b.md pre.md-code code .tk-cmt{color:#6b7a90;font-style:italic}
+  .msg .b.md pre.md-code code .tk-fn{color:#66d9ef}
+  .msg .b.md pre.md-code code .tk-cls{color:#e6c07b}
+  .msg .b.md pre.md-code code .tk-tag{color:#7cc7ff}
+  .msg .b.md pre.md-code code .tk-op{color:#ff9d5c}
+  /* 自定义语言标签角标（data-lang）*/
+  .msg .b.md pre.md-code{position:relative}
+  .msg .b.md pre.md-code[data-lang]:not([data-lang=""])::before{
+    content:attr(data-lang);position:absolute;top:0;right:0;font-size:10px;color:#5d6577;
+    background:#141a24;border-left:1px solid #2b3648;border-bottom:1px solid #2b3648;
+    border-radius:0 7px 0 6px;padding:1px 7px;font-family:Consolas,Menlo,monospace}
+  /* 引用浮窗里的正文也走同一套 md 样式 */
+  .pop .pb.md{white-space:normal}
+  .pop .pb.md strong{color:#fff;font-weight:800;background:rgba(110,168,255,.16);border-radius:4px;padding:0 2px}
+  .pop .pb.md pre.md-code code .tk-kw{color:#ff7bb0;font-weight:600}
+  .pop .pb.md pre.md-code code .tk-str{color:#9ae66e}
+  .pop .pb.md pre.md-code code .tk-num{color:#ffb86c}
+  .pop .pb.md pre.md-code code .tk-cmt{color:#6b7a90;font-style:italic}
+  dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;
+         padding:16px;width:min(460px,92vw)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog h2{margin:0 0 10px;font-size:15px}
+  dialog input{width:100%;background:#0f1218;color:var(--fg);border:1px solid var(--line);
+               border-radius:8px;padding:8px;font:inherit;margin-bottom:10px}
+  .note{color:var(--dim);font-size:12px;margin:6px 0 0}
+  pre.banner{white-space:pre-wrap;color:var(--dim);font-size:12px;padding:12px 14px;margin:0}
+  .err{color:var(--err)}
+  /* 窄屏：三段结构不变，中段仍是唯一滚动区（不塌陷、不叠加） */
+  @media (max-width:640px){
+    header{gap:6px;padding:0 8px}
+    header h1{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0}
+    #who{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0}
+    header button{padding:6px 9px;font-size:12px;white-space:nowrap;flex:0 0 auto}
+    main{grid-template-columns:var(--hx-aside-w) var(--hx-split-w) 1fr}
+    :root{--hx-aside-w:118px}   /* 窄屏默认（JS 未加载时的兜底；JS 会在 html 上写内联变量） */
+    aside{padding:6px}
+    .gitem{padding:6px 7px}
+    /* #418-2：窄屏下消息区与输入区同用 10px 内边距，左右边界仍严格对齐 */
+    #log{padding:12px 10px}
+    /* #452-2：窄屏也把右内边距归零，输入区右边界同样贴到窗口右边缘 */
+    #composer{padding:8px 0 8px 10px;gap:6px}
+    /* 窄屏放不下 chip 条：隐藏它（正文里手打 @ 仍可用，联想与 hint 照常） */
+    #composer > .mentions{display:none}
+    /* #438-3：窄屏过滤条内边距与 #log 的 10px 对齐 */
+    #msgfilter{padding:6px 10px}
+  }
+
+  /* #477：文字按钮改图标 —— .ico 统一成方形图标钮，尺寸与 .ghost 同高，
+     无文字所以靠 title/aria-label 保留语义（鼠标悬停有提示、读屏器能念）。 */
+  .ghost.ico { padding: 0; width: 38px; min-width: 38px; height: 34px; text-align: center;
+    font-size: 17px; line-height: 1; overflow: hidden; }
+  .ghost.ico:disabled { opacity: .45; }
+  /* #addagent：双人图标本体是彩色 emoji，黑白主题里用 filter 压成单色，
+     字号略降（彩色字形视觉比线条粗），跟 ◀ / ⊟ / ＋ 尽量同排。 */
+  /* #addagent：图标走 Windows 自带图标字体 Segoe MDL2 Assets 的线框字形，
+     走 color 着色（--fg #e6e8ee）—— 天然单色细线，与 ◀ / ⊟ / ✕ / ＋ 同族。
+     不用 filter、不降字号，尺寸与同排图标完全一致。 */
+  #addagent{font-family:"Segoe MDL2 Assets","Segoe Fluent Icons",-apple-system,"Segoe UI",sans-serif}
+  #addagent:disabled{filter:grayscale(1) opacity(.45)}
+  #send { padding: 0; width: 40px; min-width: 40px; text-align: center; font-size: 17px; line-height: 1; }
+  @media (max-width:640px){header button{padding:6px 9px}}
+
+  /* ===== #432-3：左栏两个 TAB（「我的群」/「任务队列」）=====
+     数据源与右侧抽屉同一套：task_svc :9981 的 GET /tasks?group=<本群 session_id>（CORS *）。
+     两个 TAB 页共用左栏宽；只有「任务队列」自己的列表滚动（#tqueue），页面本体仍不滚。 */
+  #asidehead .atab{flex:1 1 auto;min-width:0;background:#1a1e28;color:var(--dim);
+                   border:1px solid var(--line);border-radius:7px;padding:4px 6px;
+                   font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;
+                   overflow:hidden;text-overflow:ellipsis}
+  #asidehead .atab:hover{border-color:#3a4358}
+  #asidehead .atab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #asidehead .atab .atn{font-size:10px;opacity:.9;margin-left:4px}
+  /* #448-3：队列清空按钮（只在「任务队列」TAB 显示） */
+  #asidehead .atclear{flex:0 0 auto;padding:4px 7px;font-size:12px;white-space:nowrap}
+  #groups{flex:0 0 auto;min-width:0}
+  #groups[hidden],#tqueue[hidden]{display:none !important}
+  #tqueue{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
+  .tqitem{border:1px solid var(--line);border-radius:8px;background:#1a1e28;
+          padding:6px 8px;margin-bottom:6px}
+  .tqitem.special{border-color:#6b4a12;box-shadow:inset 3px 0 0 var(--warn)}
+  .tqitem.done{opacity:.62}
+  .tqitem .tqh{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .tqitem .tqs{font-size:10px;padding:1px 6px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+  .tqitem .tqs.pending{color:var(--warn);border-color:#5a4624}
+  .tqitem .tqs.running{color:var(--accent);border-color:#2b4166}
+  .tqitem .tqs.done{color:var(--ok);border-color:#245a3c}
+  .tqitem .tqs.failed{color:var(--err);border-color:#5a2422}
+  /* #534：条目正文 = 抽象后的任务名（一行短名），悬停出详情 */
+  /* #541：短名与详情都来自**模型**（异步富化），未回来时先显示规则兜底名 + 「富化中…」 */
+  .tqitem .tqd{font-size:12px;font-weight:600;margin:3px 0 2px;word-break:break-word;
+               cursor:help}
+  .tqitem .tqd:hover{color:#fff;text-decoration:underline dotted}
+  .tqitem .tqe{font-size:10px;color:var(--warn);border:1px dashed #5a4624;
+               border-radius:99px;padding:0 5px;margin-left:4px;font-weight:400;cursor:help}
+  .tqitem .tqm{font-size:10px;color:var(--dim);word-break:break-all}
+/* ================= #476：#编号 引用标签 + 展开浮窗 ================= */
+/* 聊天记录里 #NNN（正文内 + 每条消息头部的 seq）都是可点的引用标签：
+   点一次展开那条消息的浮窗，再点一次收起。浮窗可拖动、可固定（固定后刷新仍在原位），
+   多个标签可同时展开、多个浮窗并存。浮层挂在 body 下（#refpop），
+   所以 #log 每次轮询重渲染都不会碰它。 */
+.mref{color:#7fb2ff;cursor:pointer;border-bottom:1px dotted #7fb2ff;border-radius:3px;
+      padding:0 1px;transition:background .12s}
+.mref:hover{background:#22304a}
+.mref.on{background:#2c4670;color:#dce9ff}
+.msg .h .seq.mref{color:#8fb7ee}
+#refpop{position:fixed;left:0;top:0;width:0;height:0;z-index:70}
+.pop{position:fixed;width:360px;min-width:240px;max-width:min(560px,92vw);
+     background:#161b26;border:1px solid #3a4658;border-radius:10px;
+     box-shadow:0 14px 34px rgba(0,0,0,.6);display:flex;flex-direction:column;
+     overflow:hidden}
+.pop.dragging{opacity:.92}
+.pop.pinned{border-color:#3f7a4f;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 0 1px #2c5a38 inset}
+.pop .ph{display:flex;gap:6px;align-items:center;padding:5px 6px 5px 9px;
+         border-bottom:1px solid var(--line);font-size:11px;color:var(--dim);
+         background:#1b2130;cursor:move;user-select:none}
+.pop .ph .refseq{color:#8fb7ee;font-weight:600}
+.pop .ph .refmeta{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pop .ph .spacer{flex:1 1 auto}
+.pop .ph button{padding:1px 7px;font-size:11px;line-height:1.5;cursor:pointer}
+.pop .ph .refpin.on{color:var(--ok);border-color:#2c5a38}
+.pop .pb{padding:8px 10px;overflow:auto;max-height:44vh;font-size:13px;line-height:1.5;
+         white-space:pre-wrap;word-break:break-word}
+.pop .pb.err{color:var(--warn)}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>团队群 · 试用台</title>
+<link rel="stylesheet" href="/group.css">
+</head>
+<body>
+<header>
+  <h1>团队群 · 试用台</h1>
+  <span id="who">身份读取中…</span>
+  <span class="spacer"></span>
+  <button class="ghost ico" id="newbtn" title="建群（新建一个群）" aria-label="建群">＋</button>
+
+
+  <button class="ghost ico" id="refresh" title="刷新群列表与聊天记录" aria-label="刷新">↻</button>
+</header>
+
+<!-- Agent 在线态条（主界面顶部）：数据源 /api/agents 的 online 字段。
+     在线 = 所在节点的 a2a 心跳可达；离线灰显；探不到的显示「未知」 -->
+<div id="agentbar"><span class="abt">AGENTS</span><span id="ablist" class="ablist">读取中…</span></div>
+
+<main>
+  <aside>
+    <div id="asidehead">
+      <!-- #432-3：两个 TAB 页 —— 「我的群」/「任务队列」（同一左栏，互斥显示） -->
+      <button class="atab on" id="tab-groups" role="tab" aria-selected="true"
+              title="我参与的群（kind=meet）">我的群</button>
+      <button class="atab" id="tab-queue" role="tab" aria-selected="false"
+              title="本群任务队列（9984 会话台账 todos · 群里 @agent 下发即入队）">任务队列<span class="atn" id="atq-n"></span></button>
+      <!-- #448-3：清空队列（服务端 POST /api/sessions/<sid>/todos/purge，落库；刷新后仍为空） -->
+      <button class="ghost atclear" id="tqclear" hidden
+              title="清空本群任务队列（落库，刷新后仍为空）">清空</button>
+      <button class="ghost ico" id="collapsebtn" title="向左折叠左栏面板" aria-label="折叠左栏">◀</button>
+    </div>
+    <div id="groups"></div>
+    <div id="tqueue" hidden></div>
+  </aside>
+
+  <!-- #418-3 拖拽分隔条：左右拉调整左栏宽度（双击复位） -->
+  <div id="split" title="拖动调整「我的群」宽度，双击复位"><button id="splitchev" title="展开 / 折叠「我的群」面板">◀</button></div>
+
+  <section>
+    <div id="head">
+      <span class="title" id="gtitle">未选群</span>
+      <span id="gmeta" class="pendo"></span>
+      <span class="spacer"></span>
+      <!-- #addagent：把名册里的 Agent 拉进当前群（同排：折叠/展开 · 添加 Agent · 关群） -->
+      <button class="ghost ico" id="addagent" title="添加 Agent 加入本群" aria-label="添加 Agent"></button>
+      <button class="ghost ico" id="tgall" title="一键折叠本群所有主题组" aria-label="折叠/展开全部主题组">⊟</button>
+      <button class="ghost ico" id="closebtn" disabled title="宣布散会（关群，归档后不能再发言）" aria-label="散会">✕</button>
+    </div>
+    <div id="pending"></div>
+    <!-- #438-3：按发言者过滤消息（多选；全不选 = 全显）。放在 #log 外面 ——
+         #log.innerHTML 在切群/首拉时会被清空，过滤条不能被一起清掉。 -->
+    <div id="msgfilter" hidden></div>
+    <div id="log"><pre class="banner">左边选一个群，或点右上「＋ 建群」。建群后你就是发起人（只有你能宣布散会）。</pre></div>
+  </section>
+<div id="composer">
+  <div class="row">
+    <!-- #452-1：关掉浏览器英文拼写检查 / 自动纠错（红波浪线）——
+         spellcheck=false 是开关本体，autocorrect/autocapitalize/autocomplete=off
+         是 Safari / iOS / 各类输入法的同类抑制项。 -->
+    <textarea id="text" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+              placeholder="在这里说话。打 @ 会弹出本群成员联想（↑↓ 选，Enter 补全）；Ctrl+Enter 直接发送。"></textarea>
+    <button id="send" disabled title="发送（Ctrl+Enter）" aria-label="发送">➤</button>
+  </div>
+  <div class="mentions" id="mentions"></div>
+  <div class="ac" id="ac"></div>
+  <div class="note" id="hint"></div>
+</div>
+
+</main>
+
+
+
+
+
+<dialog id="adddlg">
+  <h2>添加 Agent 加入本群</h2>
+  <div class="note" style="margin-bottom:10px" id="addnote">选择要拉进本群的 Agent（已在群里的置灰不可选）：</div>
+  <div class="mentions" id="addsel"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="addcancel">取消</button>
+    <button id="addok">加入</button>
+  </div>
+</dialog>
+
+<dialog id="dlg">
+  <h2>建一个新群</h2>
+  <input id="gt" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" placeholder="群名，例如：team_chat 前后端配合">
+  <div class="note" style="margin-bottom:10px">成员（你自己会自动加入）：</div>
+  <div class="mentions" id="agsel"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="gcancel">取消</button>
+    <button id="gok">创建</button>
+  </div>
+</dialog>
+
+<script src="/md.js"></script>
+<script src="/tex.js"></script>
+<script src="/hl.js"></script>
+<script src="/codeblock.js"></script>
+<script src="/group_transport.js"></script>
+<script src="/group_view.js"></script>
+</body>
+</html>

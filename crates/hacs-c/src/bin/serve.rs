@@ -38,6 +38,35 @@ fn parse_opts() -> Opts {
     o
 }
 
+
+// 内嵌 L4 前端资产（Python hub/l4_experience 静态文件，PARITY 57）
+static ASSET_codeblock_js: &str = include_str!("../../l4_assets/codeblock.js");
+static ASSET_group_css: &str = include_str!("../../l4_assets/group.css");
+static ASSET_group_html: &str = include_str!("../../l4_assets/group.html");
+static ASSET_group_transport_js: &str = include_str!("../../l4_assets/group_transport.js");
+static ASSET_group_view_js: &str = include_str!("../../l4_assets/group_view.js");
+static ASSET_hl_js: &str = include_str!("../../l4_assets/hl.js");
+static ASSET_index_html: &str = include_str!("../../l4_assets/index.html");
+static ASSET_items_js: &str = include_str!("../../l4_assets/items.js");
+static ASSET_md_js: &str = include_str!("../../l4_assets/md.js");
+static ASSET_tex_js: &str = include_str!("../../l4_assets/tex.js");
+
+fn asset(rel: &str) -> Option<&'static str> {
+    Some(match rel {
+        "codeblock.js" => ASSET_codeblock_js,
+        "group.css" => ASSET_group_css,
+        "group.html" => ASSET_group_html,
+        "group_transport.js" => ASSET_group_transport_js,
+        "group_view.js" => ASSET_group_view_js,
+        "hl.js" => ASSET_hl_js,
+        "index.html" => ASSET_index_html,
+        "items.js" => ASSET_items_js,
+        "md.js" => ASSET_md_js,
+        "tex.js" => ASSET_tex_js,
+        _ => return None,
+    })
+}
+
 fn content_type(path: &str) -> &'static str {
     match path.rsplit('.').next().unwrap_or("") {
         "html" | "htm" => "text/html; charset=utf-8",
@@ -221,6 +250,10 @@ fn serve_static(opts: &Opts, path: &str) -> (u16, Vec<(String, String)>, Vec<u8>
     let rel = path.trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
     let full = std::path::Path::new(&opts.root).join(rel);
+    if let Some(a) = asset(rel) {
+        let ct = content_type(rel);
+        return (200, vec![("Content-Type".into(), ct.into())], a.as_bytes().to_vec());
+    }
     match std::fs::read(&full) {
         Ok(data) => {
             let ct = content_type(rel);

@@ -251,3 +251,5 @@
 55. post_group（L1 出口件 bin）：选群（显式>env>默认群>最近 open，群标题唯一命中否则拒发）、@ 提及过滤（名册校验+@所有人→@all）、回读校验（前 40 字比对）、--todo-id/--todo-status 同给同不给、翻 done 须 --landing。HTTP 用手写 http_client（X-Agent-Id 头），错误形状 network/http_N 一致。E2E @19980：发送+回读校验 seq=3 通过、todo 缺件 404 透传、参数一半报错 rc=2。
 
 56. scan_secrets（提交前密钥扫描门禁，Python tools/scan_secrets.py → Rust tools/scan_secrets.rs 独立 rustc -O 单文件，不入 workspace）：两路口径（凭证指纹 + 赋值即口令）手写对应物 regex-free；指纹逐条对齐（github/aws/private-key/feishu/slack/openai/anthropic/jwt/pg-dsn/url-basic-auth/bearer）；private-key 用「BEGIN 与 PRIVATE KEY 之间仅大写+空格」复刻正则语义（substring contains 会误伤自家字面量）；PLACEHOLDER/NUMERICISH/CONSTNAME/LITERALISH/KEY_HINT 词边界口径一致；FIXTURE_MARK 路2豁免路1照扫；掩码 head3…tail2+len 不回显原文；rc 0/1/2。偏差：Rust 结构体字段初始化 `token: String,`（无引号裸标识符值）按变量引用放过 —— Python 树无此形态（字段带类型注解），属 Rust 侧必需豁免。E2E：Rust 树 clean、Python 树 clean、伪造 ghp_ token 命中 rc=1、夹具豁免 ✓。
+
+57. serve 内嵌 L4 前端资产：hub/l4_experience 静态文件（codeblock/group/group_transport/group_view/hl/items/md/tex.js + group.css/index.html，共 10 件）原样拷贝入 crates/hacs-c/l4_assets/ 并 include_str!，资产优先、--root 磁盘回退（缺件仍 404）。内容与 Python 树逐字节一致（cp 不改写）。偏差：无（serve 行为本身差异已登记 52）。

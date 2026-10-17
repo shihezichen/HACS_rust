@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人机对话台 · team_chat</title>
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./views.css">
+<link rel="stylesheet" href="./extras.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶部全局态 -->
+  <header id="topbar">
+    <div class="brand">人机对话台</div>
+    <div class="globalstat" id="globalstat">
+      <span class="pill" id="gs-agents" title="在线 Agent">● 在线 <b id="gs-online">–</b>/<span id="gs-total">–</span></span>
+      <span class="pill" id="gs-meetings" title="进行中会议">◉ 会议 <b id="gs-running">–</b></span>
+      <span class="pill" id="gs-unread" title="未读汇总">✉ 未读 <b id="gs-unread-n">–</b></span>
+      <span class="pill conn" id="gs-conn" data-state="off">○ 未连接</span>
+    </div>
+    <div class="userbox" id="userbox" title="身份"></div>
+    <button id="dm-new" title="新建 1:1 对话">＋ 对话</button>
+    <button id="meeting-new" title="新建会议">◉ 建会</button>
+    <button id="mock-toggle" title="后端未就绪时用演示数据预览">演示</button>
+    <button id="hx-open" title="条目三段式浏览：顶栏固定 / 底部固定 / 中段唯一滚动（输入 #序号 定位）">☰ 条目</button>
+  </header>
+
+  <div id="mock-banner">
+    <span>🧪 演示模式</span>
+    <span class="mb-why" id="mock-why">后端端点未就绪</span>
+    <span class="mb-hint">界面与交互为真实实现，数据为 mock；后端就绪后自动切换真实数据</span>
+  </div>
+
+  <div id="body">
+    <!-- 左栏：Agent 花名册 + 会话列表 -->
+    <aside id="roster">
+      <div class="pane-title">Agent 花名册</div>
+      <ul id="roster-list"></ul>
+      <div class="pane-title">会话</div>
+      <ul id="session-list"></ul>
+    </aside>
+
+    <!-- 中部：会话 Tab 区 -->
+    <main id="tabsarea">
+      <div id="tabbar">
+        <div id="tab-list"></div>
+        <button id="tab-new" title="新会话">＋</button>
+      </div>
+      <div id="panes"></div>
+    </main>
+
+    <!-- 右栏：上下文 / 黑板引用 -->
+    <aside id="context">
+      <div class="pane-title">上下文 / 引用</div>
+      <div id="context-body"><p class="muted">选定会话后显示引用的黑板条目、文件与量测。</p></div>
+    </aside>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- ============================================================
+       三段式条目视图（并入自 hacs_ui 骨架）
+       顶 #hx-top 固定 / 底 #hx-bottom 固定 / 中 #hx-mid 唯一滚动容器
+       ============================================================ -->
+  <section id="hx-view" hidden>
+    <header id="hx-top">
+      <span class="hx-brand">条目 · 三段式</span>
+      <span class="hx-sub" id="hx-src">数据源：…</span>
+      <button class="hx-ghost" id="hx-reload" type="button" title="重新加载第一页">⟳ 刷新</button>
+      <button class="hx-ghost" id="hx-pop-close-top" type="button" title="关闭（Esc）">× 关闭</button>
+    </header>
+
+    <main id="hx-mid">
+      <div class="hx-status" id="hx-status">加载中…</div>
+      <div class="hx-list" id="hx-list"></div>
+
+      <!-- A-2 浮窗：绝对定位于 #hx-mid 内，不破三段布局 -->
+      <div class="hx-pop" id="hx-pop" hidden>
+        <div class="hx-pop-head">
+          <span class="hx-pop-seq" id="hx-pop-seq">#-</span>
+          <button class="hx-pop-close" id="hx-pop-close" type="button" title="关闭 (Esc)">×</button>
+        </div>
+        <div class="hx-pop-body" id="hx-pop-body"></div>
+        <div class="hx-pop-meta" id="hx-pop-meta"></div>
+      </div>
+    </main>
+
+    <footer id="hx-bottom">
+      <input id="hx-input" placeholder="输入 #序号 定位并高亮（例：#12 / 12 / it_0012）" autocomplete="off">
+      <button id="hx-jump" type="button">定位</button>
+      <button id="hx-more" type="button" title="按 next_cursor 翻页">加载更多</button>
+      <span class="hx-count" id="hx-count">0 / 0</span>
+    </footer>
+  </section>
+
+  <!-- 新建 DM 对话框 -->
+  <div id="dm-dialog" class="dlg-mask">
+    <div class="dlg">
+      <div class="dlg-title">新建 1:1 对话</div>
+      <div class="dlg-body">
+        <div class="fd-block"><span>对话对象 *（已存在同成员会话则直接打开）</span>
+          <div id="dm-agents" class="md-mems"></div>
+        </div>
+        <label class="fd"><span>标题（可选）</span><input id="dm-title" placeholder="留空自动生成"></label>
+        <div id="dm-error" class="dlg-err"></div>
+      </div>
+      <div class="dlg-foot">
+        <button id="dm-cancel" class="btn-ghost">取消</button>
+        <button id="dm-submit" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 建会对话框（§6.1 四要素门禁） -->
+  <div id="meeting-dialog" class="dlg-mask">
+    <div class="dlg">
+      <div class="dlg-title">新建会议</div>
+      <div class="dlg-body">
+        <label class="fd"><span>会议名称</span><input id="md-title" placeholder="留空则用主题"></label>
+        <label class="fd"><span>议题</span><input id="md-topic" placeholder="本次会议的议题"></label>
+        <label class="fd"><span>问题</span><input id="md-question" placeholder="要回答的核心问题"></label>
+        <label class="fd"><span>目标 *</span><input id="md-goal" placeholder="本次要达成什么（必填）"></label>
+
+        <div class="fd-block"><span>议程 *（每条需填预期产出）</span>
+          <div id="md-agenda"></div>
+          <button type="button" id="md-add-agenda">＋ 加一条议程</button>
+        </div>
+
+        <div class="fd-block"><span>成员 *（至少一位）</span>
+          <div id="md-members" class="md-mems"></div>
+        </div>
+
+        <label class="fd"><span>主持人 *</span><select id="md-moderator"></select></label>
+        <div class="fd-row">
+          <label class="fd"><span>最大轮次</span><input id="md-rounds" type="number" value="3" min="1"></label>
+          <label class="fd"><span>截止秒数</span><input id="md-deadline" type="number" value="1800" min="60"></label>
+        </div>
+        <div id="md-error" class="dlg-err"></div>
+      </div>
+      <div class="dlg-foot">
+        <button id="md-cancel" class="btn-ghost">取消</button>
+        <button id="md-submit" class="btn-primary">创建会议</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="./api.js"></script>
+<script src="./mock.js"></script>
+<script src="./meeting.js"></script>
+<script src="./observers.js"></script>
+<script src="./sidebar.js"></script>
+<script src="./app.js"></script>
+<script src="./items.js"></script>
+</body>
+</html>
