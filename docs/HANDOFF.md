@@ -29,8 +29,10 @@ P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
 P3  L3 重服务（收益最大）  ✅ task_svc + chat_svc + blackboard_svc + blackboard_view 全落地
-P4  L3 其余件 + X 其余面  🟡 进行中：team_group ✅ / rt_remind ✅ / session_ctx_archiver ✅ / shared_content ✅ / group_watch_pending ✅ / embedder ✅（lib-only，见 PARITY 50）；✅ gen_nats_conf / serve / roster_creds_mirror 已落（PARITY 52；内存 gen_nats_conf 9.3×、serve 10.0×）；余 P5
-P5  L4 + C 收口 + 部署件   🟡 进行中：nodelet ✅（53，3.4×）、team ✅（54，9.9×）、post_group ✅（55，8.9×）；group_watch_delivery 已并入 group_watch bin（投递原语在组合根）；scan_secrets ✅（56，tools/scan_secrets.rs 单文件门禁，双树 clean + 伪造 token 拦截 E2E）；l4_experience 资产 ✅（57，crates/hacs-c/l4_assets/ 10 件 include_str! 内嵌 serve）；余部署收口
+P4  L3 其余件 + X 其余面  ✅ 完成（team_group / rt_remind / session_ctx_archiver / shared_content / group_watch_pending / embedder(50, lib-only) / roundtable(51) / gen_nats_conf+serve+roster_creds_mirror(52)）
+P5  L4 + C 收口 + 部署件   ✅ 完成：nodelet（53，3.4×）、team（54，9.9×）、post_group（55，8.9×）、scan_secrets（56，双树 clean + 伪造 token 拦截）、l4_experience 资产内嵌（57）；group_watch_delivery 已并入 group_watch bin（投递原语在组合根）
+
+**移植收官**：Python → Rust 分层移植（P0–P5）全部完成；workspace 262 测试全绿；内存收益 3.4×–18.5×（详见 PARITY）；偏差逐条登记 docs/PARITY.md。
 ```
 
 ### 已完成（3 个提交）
