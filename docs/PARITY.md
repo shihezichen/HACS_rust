@@ -235,3 +235,10 @@
     "没装 fastembed" 路径的逐条对齐；配置解析（BB_EMBED_MODEL/BB_EMBED_DIM 非法退默认）
     与 ERROR_MAX=200 截断一致。接模型后只需实现 load_inner()（粘性/单例语义已就位）。
     Python 版无独立入口，Rust 同为 lib-only，无内存对比项。
+
+50. roundtable（L3：roundtable_core + roundtable_sched，bin roundtable）
+- 全量移植 Python roundtable.py（2430 行）：会前门禁（goal/agenda 缺一 exit 2）、JSON 提取三路降级（```json 块→整段→括号平衡扫描）、parse_turn/parse_confirm（解析失败一律 abstain 不替人点头）、refs 空不入库、parse_degraded 降级（整段留痕 + refs 自引）、收敛判据①相似度(trgm 三元组自实现)②立场③投票④硬上限、round_no<2 不许收敛、当场确认（分母=在场应答者，无 object 且 agree>=⌊在场/2⌋+1）、落实事项三硬口径（what/owner∈roster/due_at 未来）、缺席=defect 单（24h、同场一人一条、evidence 记次数）、出席率分母=应到人数、prompt 省 token（片段≤12 条×240 字符，超限先砍最旧→砍非当前议程行→硬截）。
+- Rust 侧差异（登记）：①相似度用自实现 trgm 三元组（Python re 去除非 [0-9a-z一-鿿] 后 padded 3-gram），未用 pg_trgm 语义完全一致；②new_session_id 尾巴 4 hex 用纳秒^pid 混合熵代替 uuid4（形状 rt-YYYYMMDD-HHMMSS-xxxx 一致）；③due_at 落库为 UTC ISO 字符串（`$n::text::timestamptz`），Python 直接传 datetime；④bin 增加 `RT_FAKE_REPLY=1` 环境口（DryRunTransport 可与 --commit 组合，供真库 E2E；Python 无此口，dry-run 与 commit 互斥）；⑤确认 verdict 解析失败时 note 拼接格式与 Python 一致（`note（err）`）。
+- 单测 18 个（core 10 + sched 4 + bin 场景 4）：dry-run 全链 converged、缺席 defect 开单、object 阻断 deferred、确认分母口径、actions 三硬口径、prompt 预算夹逼等。
+- 真库 E2E（PG@15432 + blackboard_svc@9940 + RT_FAKE_REPLY）：aborted 路径（真 NATS down：探针无应答→缺席→0<2 中止→defect×2 落库 ✓）；converged 全链（create_session→turns×4→黑板条目→结论条目→确认→actions（due_at=+7d timestamptz）→issues→sessions state=converged/confirmed ✓）。
+- 内存：Python 30,496 kB vs Rust 3,584 kB = **8.5×**（release + /usr/bin/time -v Max RSS）。

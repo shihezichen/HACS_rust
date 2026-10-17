@@ -20,6 +20,8 @@ pub mod blackboard_view;
 pub mod chat_svc;
 pub mod embedder;
 pub mod group_watch_pending;
+pub mod roundtable_core;
+pub mod roundtable_sched;
 pub mod rt_remind;
 pub mod session_ctx_archiver;
 pub mod shared_content;
