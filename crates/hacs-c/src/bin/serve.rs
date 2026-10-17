@@ -38,7 +38,6 @@ fn parse_opts() -> Opts {
     o
 }
 
-
 // 内嵌 L4 前端资产（Python hub/l4_experience 静态文件，PARITY 57）
 static ASSET_codeblock_js: &str = include_str!("../../l4_assets/codeblock.js");
 static ASSET_group_css: &str = include_str!("../../l4_assets/group.css");
@@ -252,7 +251,11 @@ fn serve_static(opts: &Opts, path: &str) -> (u16, Vec<(String, String)>, Vec<u8>
     let full = std::path::Path::new(&opts.root).join(rel);
     if let Some(a) = asset(rel) {
         let ct = content_type(rel);
-        return (200, vec![("Content-Type".into(), ct.into())], a.as_bytes().to_vec());
+        return (
+            200,
+            vec![("Content-Type".into(), ct.into())],
+            a.as_bytes().to_vec(),
+        );
     }
     match std::fs::read(&full) {
         Ok(data) => {

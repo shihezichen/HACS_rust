@@ -255,3 +255,5 @@
 57. serve 内嵌 L4 前端资产：hub/l4_experience 静态文件（codeblock/group/group_transport/group_view/hl/items/md/tex.js + group.css/index.html，共 10 件）原样拷贝入 crates/hacs-c/l4_assets/ 并 include_str!，资产优先、--root 磁盘回退（缺件仍 404）。内容与 Python 树逐字节一致（cp 不改写）。偏差：无（serve 行为本身差异已登记 52）。
 
 58. teamd 两处 parity bug（使用手册 E2E 联调时发现并修复）：① call_a2a 的 POST 路径 `<base>/message` → Python 口径 `<base>/a2a/<member>/messages`（此前 NATS down 路径测试覆盖不到这条真转发路径）；② worker 回信连接无凭据（NATS users 白名单下 Authorization Violation）→ 按成员各自凭据建连（Python 口径：回信走该成员自己的连接；creds 值是口令文件路径，须 read_secret_file）。同轮发现并修 nats_client parse_addrs 不剥 `nats://` 前缀（teamd --nats-url 文档形态本身解析失败）。E2E：本机 NATS(9930) + teamd(9960) + a2a_svc(9920) + cli_backend --stub(9970) + chat_svc(19980) + blackboard(9940)，`team say` 全链收到 agent 回复 ✓；`team who` 心跳发现 ✓；say 对离线成员超时路径 ✓；262 tests 绿。
+
+59. team say 目标解析 bug（一键安装脚本 E2E 发现并修复）：`cmd_say` 的 target 取"argv 第一个不以 -- 开头的参数"，而 `--as lobster` 的值 lobster 也不是 -- 开头 → `say --as lobster --to hermes` 把 target 取成 lobster（发给了自己）。此前联调用 `--as hermes --to hermes`（as=to）恰好掩盖。修复：target 优先取显式 `--to`，否则取"非取值型旗标后继"的位置参数（维护 24 个取值旗标清单）。回归：`say --as A --to B` PUB subject=a2a.v1.req.B ✓、`say B "text"` 位置参数形态 ✓、262 tests 绿。

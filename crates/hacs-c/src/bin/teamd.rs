@@ -164,7 +164,11 @@ fn main() {
                         Err(env) => {
                             counters.inc("bad_requests");
                             counters.inc("errors");
-                            let _ = conn_for_worker.publish(&member, &reply, env.to_string().as_bytes());
+                            let _ = conn_for_worker.publish(
+                                &member,
+                                &reply,
+                                env.to_string().as_bytes(),
+                            );
                             gate.release(&member);
                             continue;
                         }

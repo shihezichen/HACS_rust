@@ -3,6 +3,48 @@
 > 本手册所有命令与参数均在本机（Ubuntu 24.04，单机扮演中枢 + 成员两种角色）**实机验证通过**
 > （2026-10，E2E 记录见 docs/PARITY.md 第 58 条）。示例中的口令均为测试值，生产请换强口令。
 
+## 快速上手（一键脚本，推荐）
+
+v0.1.2 起 Release 按**角色拆包**，附一键安装脚本（全部实机验证过）：
+
+| 包 | 装在哪 | 内容 |
+|---|---|---|
+| `hacs-rust-*-linux-hub.tar.gz` | 中枢机 | 22 个服务程序 + 安装脚本 |
+| `hacs-rust-*-linux-member.tar.gz` | 成员机 | `team` CLI + 安装脚本（<1 MB） |
+| `hacs-rust-*-windows-hub.tar.gz` | Windows 中枢 | 同 hub（.exe） |
+| `hacs-rust-*-windows-member.tar.gz` | Windows 成员 | team.exe |
+
+**中枢机**（一条命令完成 安装依赖→装程序→建库→生成配置→写 systemd→启动→验证）：
+
+```bash
+tar xzf hacs-rust-v*-linux-hub.tar.gz && cd hacs-rust-v*-linux-hub
+sudo ./install_hub.sh hermes,lobster            # 参数=成员列表（可再加 中枢IP 对端IP）
+# 成功输出：8 步全 ✓，成员凭据在 /etc/nats/creds/<成员>.pass
+```
+
+**成员机**（单台手工装）：
+
+```bash
+tar xzf hacs-rust-v*-linux-member.tar.gz && cd hacs-rust-v*-linux-member
+sudo ./install_member.sh lobster <中枢IP> ./lobster.pass   # 凭据从中枢拷来
+# 自动装 team CLI + 写 /etc/hacs/member.env + 放凭据 + who 入网验证
+```
+
+**批量部署多台成员机**（在任一已配 SSH 免密的跳板机上，一行循环完成）：
+
+```bash
+cat members.txt     # 每行: <成员名> <user>@<host> [中枢IP]
+#   lobster  ubuntu@10.4.46.230  10.4.46.228
+#   top001   root@10.4.46.231    10.4.46.228
+./deploy_members.sh hacs-rust-v*-linux-member.tar.gz members.txt
+# 自动 scp 包+凭据 → 远端执行 install_member.sh → 汇总成功/失败
+```
+
+> 幂等：脚本可安全重跑（凭据/配置已存在则不覆盖）。服务由 systemd 托管（Restart=always），
+> 开机自启。以下 1–3 节是手工部署的逐步说明（调试/无 systemd 环境用）。
+
+---
+
 ## 0 角色划分：中枢机 vs 成员机
 
 HACS 是「中枢 + 多成员」的星型拓扑：

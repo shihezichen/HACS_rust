@@ -460,9 +460,46 @@ fn build_say_envelope(text: &str, member: &str, timeout: f64, session_id: &str) 
 
 fn cmd_say(args: &[String]) -> i32 {
     let o = parse_flags(args);
-    let Some(target) = args.iter().find(|a| !a.starts_with("--")).cloned() else {
-        eprintln!("必须给被叫成员 id");
-        return 2;
+    // target 取优先级：显式 --to > 位置参数；注意 --as <v> 的值 v 不以 -- 开头，
+    // 不能被误当位置参数（此前 --as lobster --to hermes 会把 target 取成 lobster 的 bug）。
+    let target = match o.to.clone().or_else(|| {
+        // 位置参数 = 不以 -- 开头、且前一个参数不是取值型旗标的参数。
+        let value_flags = [
+            "--as",
+            "--password-file",
+            "--nats-host",
+            "--nats-port",
+            "--timeout",
+            "--seconds",
+            "--text",
+            "--text-file",
+            "--session-id",
+            "--to",
+            "--concurrency",
+            "--roster-seconds",
+            "--dedup-file",
+            "--out",
+            "--goal",
+            "--agenda",
+            "--members",
+            "--file",
+            "--group",
+            "--reply-to",
+            "--client-msg-id",
+            "--chat-base",
+            "--limit",
+            "--since",
+        ];
+        args.windows(2)
+            .find(|w| !w[1].starts_with("--") && !value_flags.contains(&w[0].as_str()))
+            .map(|w| w[1].clone())
+            .or_else(|| args.first().filter(|a| !a.starts_with("--")).cloned())
+    }) {
+        Some(t) => t,
+        None => {
+            eprintln!("必须给被叫成员 id（位置参数或 --to）");
+            return 2;
+        }
     };
     // 互斥检查放最前（SESS-07：不被读口令失败遮掉）
     if o.session_id.is_some() && o.new_session {
