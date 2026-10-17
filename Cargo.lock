@@ -229,6 +229,7 @@ dependencies = [
  "hacs-l3-domain",
  "hacs-l4-experience",
  "hacs-x-identity",
+ "postgres",
  "serde_json",
 ]
 

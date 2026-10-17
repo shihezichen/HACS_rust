@@ -17,4 +17,5 @@ pub const MIGRATION_STATUS: &str = "pending";
 
 pub mod task_svc;
 pub mod task_svc_chat;
+pub mod blackboard_svc;
 pub mod chat_svc;

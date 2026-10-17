@@ -162,3 +162,27 @@
     （E2E 测试库需要清库），生产行为依赖外部部署同一份 schema.sql。
 35. **`chat_svc` SSE `text/event-stream`**：Python 契约 ② 阶段的推流端点本版未在
     Python 侧实现（501 兜底），Rust 同样落 501 `not_implemented`，行为一致。
+36. **`blackboard_svc` 移植完成（v1.9 对齐）**：4558 行 Python → L3 纯逻辑+数据访问
+    `blackboard_svc.rs`（约 2600 行，含 14 个单测）+ HTTP bin `bin/blackboard_svc.rs`。
+    路由面全量对齐：/healthz、/entries、/search、/sessions、/actions、/issues、
+    /tracking、/tmp、/sess、/msg、/api/shared|/shared（GET 只读 + 写 405）、admin 健康口。
+    错误契约：平信封 `{"ok": false, "error": "<code>", "detail": "..."}`（Python v1.9 对齐）。
+    E2E：11 个业务路由真 PG（15432，8 个 schema + pgvector）全链路 ok:true——
+    entries 写读、tmp 读满销毁（reads_max=1 → read_quota）、sess 建会/turn/关闭归档
+    （归档落 shared_content + shared_tasks 容器）、msg 投递→收件箱→ack→done、
+    search（关键词降级）、tracking/counts（缺表降级 None）、shared list/search/detail/tasks。
+37. **`blackboard_svc` postgres crate 参数类型坑**：psycopg2 的 `%s::jsonb`/`%s::vector`/
+    `::timestamptz` 传 str 都行，postgres crate 严格按目标类型 OID 序列化——String 会
+    `error serializing parameter N`。修法：jsonb 传 `serde_json::Value`；vector 用
+    `$N::text::vector`（先声明 text 再转）；timestamptz 用 `$N::text::timestamptz`；
+    `make_interval(secs => $N)` 传 f64（不能 i64）、`days => $N::int` 传 i32。
+38. **`blackboard_svc` 嵌入模型未接入**：Python /healthz 的 embed 段报 BAAI/bge-small-zh-v1.5
+    （loaded:false），Rust 报 `{"ok": false, "reason": "rust 移植暂未接入嵌入模型"}`；
+    /search 与 /shared/search 语义检索降级为关键词（mode 如实报 keyword）。语义排序
+    （pgvector <=>）的 SQL 路径已就绪（$N::text::vector），接模型后即生效。
+39. **`blackboard_svc` 内存对比（P3 收益实测）**：同一 PG 实例各 100+ 请求预热后：
+    Python 3.11 VmRSS 39,292 kB（Pss 26,609）；Rust release VmRSS 5,300 kB（Pss 1,870）；
+    Rust debug VmRSS 6,536 kB。**RSS 降至 Python 的 ~13.5%（省 ~86%）**。
+40. **`blackboard_svc` msg_log sweep 的 stalled 常量**：Python 把 MSG_STALL_AFTER_S 直接
+    拼进 last_error 文案（f-string）；Rust 同样编译期常量拼 SQL 文本（make_interval 的
+    秒数用字面量 `{N}.0`），行为一致。
