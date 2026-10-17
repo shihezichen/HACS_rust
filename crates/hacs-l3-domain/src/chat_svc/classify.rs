@@ -4,52 +4,223 @@ pub const TODO_INTENTS: [&str; 2] = ["task", "followup"];
 
 /// 任务引导词（任务书抬头）。
 pub const TODO_TASK_INTRODUCERS: [&str; 15] = [
-    "如下任务", "以下任务", "任务如下", "任务：", "任务:",
-    "需求：", "需求:", "要求：", "要求:", "待办：", "待办:",
-    "你负责", "负责如下", "安排如下", "分配如下",
+    "如下任务",
+    "以下任务",
+    "任务如下",
+    "任务：",
+    "任务:",
+    "需求：",
+    "需求:",
+    "要求：",
+    "要求:",
+    "待办：",
+    "待办:",
+    "你负责",
+    "负责如下",
+    "安排如下",
+    "分配如下",
 ];
 
 pub const TODO_FOLLOWUP_PHRASES: [&str; 61] = [
-    "完成了吗", "完成了没", "完成了没有", "做完了吗", "做完了没", "改完了吗", "改完了没",
-    "好了吗", "好了没", "好了没有", "搞定了吗", "搞定了没", "写好了吗", "写完了吗",
-    "弄好了吗", "弄好了没", "上线了吗", "上线了没", "修好了吗", "修好了没", "完了吗",
-    "有没有完成", "是否完成", "有没有做好", "有没有做", "有没有改",
-    "进度", "进展", "到哪一步", "到哪了", "到哪儿了", "做到哪", "进行到",
-    "怎么样了", "怎么样啦", "多久能", "还要多久", "要多久", "什么时候能", "什么时候好",
-    "啥时候能", "何时能", "催一下", "催你", "没动静", "有结果了吗", "有结果没",
-    "通报", "汇报", "报进度", "报一下", "同步一下", "同步下", "反馈一下",
-    "在做了吗", "开始了吗", "开始没", "开工了吗", "动工了吗", "可以了吗", "干完了吗",
+    "完成了吗",
+    "完成了没",
+    "完成了没有",
+    "做完了吗",
+    "做完了没",
+    "改完了吗",
+    "改完了没",
+    "好了吗",
+    "好了没",
+    "好了没有",
+    "搞定了吗",
+    "搞定了没",
+    "写好了吗",
+    "写完了吗",
+    "弄好了吗",
+    "弄好了没",
+    "上线了吗",
+    "上线了没",
+    "修好了吗",
+    "修好了没",
+    "完了吗",
+    "有没有完成",
+    "是否完成",
+    "有没有做好",
+    "有没有做",
+    "有没有改",
+    "进度",
+    "进展",
+    "到哪一步",
+    "到哪了",
+    "到哪儿了",
+    "做到哪",
+    "进行到",
+    "怎么样了",
+    "怎么样啦",
+    "多久能",
+    "还要多久",
+    "要多久",
+    "什么时候能",
+    "什么时候好",
+    "啥时候能",
+    "何时能",
+    "催一下",
+    "催你",
+    "没动静",
+    "有结果了吗",
+    "有结果没",
+    "通报",
+    "汇报",
+    "报进度",
+    "报一下",
+    "同步一下",
+    "同步下",
+    "反馈一下",
+    "在做了吗",
+    "开始了吗",
+    "开始没",
+    "开工了吗",
+    "动工了吗",
+    "可以了吗",
+    "干完了吗",
 ];
 
 pub const TODO_FOLLOWUP_STRONG: [&str; 13] = [
-    "最后一次机会", "最后机会", "最后通牒", "把你删", "把你踢", "把你移出", "不需要你",
-    "糊弄", "别糊弄", "在糊弄", "我等你的", "等你通报", "警告你",
+    "最后一次机会",
+    "最后机会",
+    "最后通牒",
+    "把你删",
+    "把你踢",
+    "把你移出",
+    "不需要你",
+    "糊弄",
+    "别糊弄",
+    "在糊弄",
+    "我等你的",
+    "等你通报",
+    "警告你",
 ];
 
 pub const TODO_TASK_ACTION_WORDS: [&str; 85] = [
-    "改", "修改", "修", "修复", "加", "增加", "新增", "补", "补齐", "补充",
-    "做", "实现", "开发", "写", "编写", "重构", "优化", "完善", "调整", "替换",
-    "删除", "去掉", "迁移", "接入", "支持", "升级", "部署", "上线", "发布",
-    "创建", "搭", "生成", "导出", "导入", "排查", "定位", "检查", "核对",
-    "测试", "验证", "复现", "整理", "梳理", "盘点", "清理", "归档",
-    "重启", "启动", "停止", "停掉", "关掉", "删掉", "清掉", "收尾", "收口",
-    "回滚", "回退", "改回", "补上", "接上", "跑通", "执行", "安装", "装上",
-    "落盘", "出图", "出件", "打包", "对齐", "拉取", "推送", "提交",
-    "重跑", "复跑", "复查", "跑一遍", "跑一下",
-    "add", "fix", "implement", "refactor", "deploy", "create", "build", "update",
+    "改",
+    "修改",
+    "修",
+    "修复",
+    "加",
+    "增加",
+    "新增",
+    "补",
+    "补齐",
+    "补充",
+    "做",
+    "实现",
+    "开发",
+    "写",
+    "编写",
+    "重构",
+    "优化",
+    "完善",
+    "调整",
+    "替换",
+    "删除",
+    "去掉",
+    "迁移",
+    "接入",
+    "支持",
+    "升级",
+    "部署",
+    "上线",
+    "发布",
+    "创建",
+    "搭",
+    "生成",
+    "导出",
+    "导入",
+    "排查",
+    "定位",
+    "检查",
+    "核对",
+    "测试",
+    "验证",
+    "复现",
+    "整理",
+    "梳理",
+    "盘点",
+    "清理",
+    "归档",
+    "重启",
+    "启动",
+    "停止",
+    "停掉",
+    "关掉",
+    "删掉",
+    "清掉",
+    "收尾",
+    "收口",
+    "回滚",
+    "回退",
+    "改回",
+    "补上",
+    "接上",
+    "跑通",
+    "执行",
+    "安装",
+    "装上",
+    "落盘",
+    "出图",
+    "出件",
+    "打包",
+    "对齐",
+    "拉取",
+    "推送",
+    "提交",
+    "重跑",
+    "复跑",
+    "复查",
+    "跑一遍",
+    "跑一下",
+    "add",
+    "fix",
+    "implement",
+    "refactor",
+    "deploy",
+    "create",
+    "build",
+    "update",
 ];
 
 pub const TODO_TASK_DIRECTIVE_MARKERS: [&str; 14] = [
-    "请", "帮我", "帮忙", "麻烦", "给我", "把", "你去", "需要你", "要你",
-    "安排", "记得", "别忘", "顺手", "新任务",
+    "请",
+    "帮我",
+    "帮忙",
+    "麻烦",
+    "给我",
+    "把",
+    "你去",
+    "需要你",
+    "要你",
+    "安排",
+    "记得",
+    "别忘",
+    "顺手",
+    "新任务",
 ];
 
 pub const TODO_ACTION_NEGATIONS: [&str; 6] = ["不", "没", "未", "别", "无", "非"];
 pub const TODO_ACTION_NEG_WINDOW: usize = 3;
 
 const TODO_TASK_NAME_PREFIXES: [&str; 11] = [
-    "如下任务", "以下任务", "任务如下", "任务", "需求", "要求", "待办",
-    "你负责", "负责如下", "安排如下", "分配如下",
+    "如下任务",
+    "以下任务",
+    "任务如下",
+    "任务",
+    "需求",
+    "要求",
+    "待办",
+    "你负责",
+    "负责如下",
+    "安排如下",
+    "分配如下",
 ];
 
 /// 入队时剥掉正文开头的「点名」（`@<id>`/`@<id>：` 这类；id 允许汉字后缀）。
@@ -163,7 +334,8 @@ pub fn todo_task_name_limit(text: &str, limit: usize) -> String {
         changed = false;
         for pre in TODO_TASK_NAME_PREFIXES.iter() {
             if let Some(rest) = body.strip_prefix(pre) {
-                body = rest.trim_start_matches([' ', ':', '：', ',', '，', '、', '\t'])
+                body = rest
+                    .trim_start_matches([' ', ':', '：', ',', '，', '、', '\t'])
                     .trim()
                     .to_string();
                 changed = true;
@@ -182,7 +354,9 @@ pub fn todo_task_name_limit(text: &str, limit: usize) -> String {
         .map(|(i, _)| i)
         .unwrap_or(body.len());
     body = body[..stop_at].trim().to_string();
-    body = body.trim_matches(['，', ',', '、', ':', '：', ';', '；', ' ']).to_string();
+    body = body
+        .trim_matches(['，', ',', '、', ':', '：', ';', '；', ' '])
+        .to_string();
     if body.is_empty() {
         return String::new();
     }
@@ -375,7 +549,11 @@ pub fn classify_human_intent(text: &str) -> serde_json::Value {
         return intent_out("followup", "followup_phrase", hits);
     }
     if is_q {
-        let h = if directives.is_empty() { actions } else { directives };
+        let h = if directives.is_empty() {
+            actions
+        } else {
+            directives
+        };
         return intent_out("followup", "question_no_directive", h);
     }
     // 处置式祈使句兜底：非否定语境的「把 …」
@@ -395,19 +573,66 @@ pub const TODO_QUESTION_TAIL_WORDS: [&str; 7] = ["吗", "呢", "了没", "没有
 
 /// #448-2 完成词表（先查否定词）。
 pub const TODO_REPLY_DONE_WORDS: [&str; 22] = [
-    "已完成", "已经完成", "均已改完", "完成了", "已做完", "修好了", "修好", "已修复", "修复完成",
-    "搞定了", "搞定", "已上线", "上线了", "改好了", "已改好", "已落库", "已生效",
-    "done", "finished", "fixed", "resolved", "completed",
+    "已完成",
+    "已经完成",
+    "均已改完",
+    "完成了",
+    "已做完",
+    "修好了",
+    "修好",
+    "已修复",
+    "修复完成",
+    "搞定了",
+    "搞定",
+    "已上线",
+    "上线了",
+    "改好了",
+    "已改好",
+    "已落库",
+    "已生效",
+    "done",
+    "finished",
+    "fixed",
+    "resolved",
+    "completed",
 ];
 pub const TODO_REPLY_DONE_NEG: [&str; 23] = [
-    "未完成", "没完成", "还没完成", "没有完成", "完不成", "未做完", "没做完",
-    "未修好", "没修好", "还没修好", "未修复", "没修复", "未搞定", "没搞定",
-    "未上线", "还没上线", "没上线", "未生效", "还没生效",
-    "not done", "not fixed", "unfinished", "incomplete",
+    "未完成",
+    "没完成",
+    "还没完成",
+    "没有完成",
+    "完不成",
+    "未做完",
+    "没做完",
+    "未修好",
+    "没修好",
+    "还没修好",
+    "未修复",
+    "没修复",
+    "未搞定",
+    "没搞定",
+    "未上线",
+    "还没上线",
+    "没上线",
+    "未生效",
+    "还没生效",
+    "not done",
+    "not fixed",
+    "unfinished",
+    "incomplete",
 ];
 pub const TODO_REPLY_DOING_WORDS: [&str; 11] = [
-    "进行中", "已开工", "开工", "正在做", "开始做", "已开始", "在做了", "处理中",
-    "doing", "in progress", "wip",
+    "进行中",
+    "已开工",
+    "开工",
+    "正在做",
+    "开始做",
+    "已开始",
+    "在做了",
+    "处理中",
+    "doing",
+    "in progress",
+    "wip",
 ];
 
 /// agent 回复里是否报完成（否定词优先）。
@@ -485,7 +710,10 @@ mod tests {
     #[test]
     fn test_dedupe_key() {
         assert_eq!(todo_dedupe_key("#476 如下任务： a b c"), "如下任务：abc");
-        assert_eq!(todo_dedupe_key("同一句话  重发"), todo_dedupe_key("同一句话重发"));
+        assert_eq!(
+            todo_dedupe_key("同一句话  重发"),
+            todo_dedupe_key("同一句话重发")
+        );
         let long: String = "甲".repeat(200);
         assert_eq!(todo_dedupe_key(&long).chars().count(), 120);
     }
@@ -494,13 +722,18 @@ mod tests {
     fn test_message_key_strips_mention() {
         // 队列正文剥过点名，消息原文带点名 —— 指纹必须相等（#448 回填实踩）
         let queued = todo_text_from_message("@hermes 如下任务：修网关", Some(448), 160);
-        assert_eq!(todo_dedupe_key(&queued), todo_message_key("@hermes 如下任务：修网关"));
+        assert_eq!(
+            todo_dedupe_key(&queued),
+            todo_message_key("@hermes 如下任务：修网关")
+        );
     }
 
     #[test]
     fn test_task_name() {
-        assert_eq!(todo_task_name("@hermes 如下任务：1. 修复登录页。要求今天完成"),
-                   "修复登录页");
+        assert_eq!(
+            todo_task_name("@hermes 如下任务：1. 修复登录页。要求今天完成"),
+            "修复登录页"
+        );
         assert_eq!(todo_task_name("#509 你负责的任务队列"), "的任务队列");
         assert_eq!(todo_task_name("我给你一个任务："), "我给你一个任务"); // 硬停顿不含冒号，抬头剥不到开头
         let long: String = format!("任务：{}", "字".repeat(40));
@@ -530,7 +763,8 @@ mod tests {
         assert_eq!(v["intent"], serde_json::json!("followup"));
         assert_eq!(v["reason"], serde_json::json!("followup_phrase"));
         // 强催问压过动作词（#494）
-        let v = classify_human_intent("我等你的完成结果通报，这是最后一次机会，否则把你从机器上删除");
+        let v =
+            classify_human_intent("我等你的完成结果通报，这是最后一次机会，否则把你从机器上删除");
         assert_eq!(v["reason"], serde_json::json!("followup_strong"));
         // 否定动作（「什么都不做」）
         let v = classify_human_intent("如果这次你还是什么都不做在这里糊弄我");
@@ -543,7 +777,10 @@ mod tests {
         let v = classify_human_intent("我们继续测试你负责的任务队列");
         assert_eq!(v["intent"], serde_json::json!("task"));
         // 空文
-        assert_eq!(classify_human_intent("   ")["reason"], serde_json::json!("empty_text"));
+        assert_eq!(
+            classify_human_intent("   ")["reason"],
+            serde_json::json!("empty_text")
+        );
     }
 
     #[test]
@@ -557,8 +794,14 @@ mod tests {
 
     #[test]
     fn test_refs() {
-        assert_eq!(todo_ref_ids("看 td_abc_123 和别的"), vec!["abc_123".to_string()]);
-        assert_eq!(todo_ref_seqs("#448 与 #12"), vec!["448".to_string(), "12".to_string()]);
+        assert_eq!(
+            todo_ref_ids("看 td_abc_123 和别的"),
+            vec!["abc_123".to_string()]
+        );
+        assert_eq!(
+            todo_ref_seqs("#448 与 #12"),
+            vec!["448".to_string(), "12".to_string()]
+        );
         assert!(todo_ref_seqs("没有引用").is_empty());
     }
 

@@ -66,7 +66,9 @@ fn main() {
     }
 
     if rest.is_empty() {
-        eprintln!("用法: a2a_call <healthz|agents|card <agent>|call <agent> --text ...> --base URL");
+        eprintln!(
+            "用法: a2a_call <healthz|agents|card <agent>|call <agent> --text ...> --base URL"
+        );
         std::process::exit(2);
     }
     let cmd = rest[0].clone();
@@ -105,7 +107,10 @@ fn main() {
             "agents" => ("GET", format!("{base}/agents"), true, None),
             "card" => (
                 "GET",
-                format!("{base}/a2a/{}/.well-known/agent-card.json", agent.unwrap_or_default()),
+                format!(
+                    "{base}/a2a/{}/.well-known/agent-card.json",
+                    agent.unwrap_or_default()
+                ),
                 false,
                 None,
             ),
@@ -116,7 +121,12 @@ fn main() {
                 };
                 let mut b = json!({"text": t, "session_id": session});
                 b["timeout_s"] = json!(timeout);
-                ("POST", format!("{base}/a2a/{}/messages", agent.unwrap_or_default()), true, Some(b))
+                (
+                    "POST",
+                    format!("{base}/a2a/{}/messages", agent.unwrap_or_default()),
+                    true,
+                    Some(b),
+                )
             }
             other => {
                 eprintln!("未知子命令: {other}");
@@ -237,7 +247,8 @@ fn raw_request(
     sock.write_all(&req).map_err(|e| format!("发送失败: {e}"))?;
     sock.flush().ok();
     let mut raw = Vec::new();
-    sock.read_to_end(&mut raw).map_err(|e| format!("读取失败: {e}"))?;
+    sock.read_to_end(&mut raw)
+        .map_err(|e| format!("读取失败: {e}"))?;
     let split = raw
         .windows(4)
         .position(|w| w == b"\r\n\r\n")

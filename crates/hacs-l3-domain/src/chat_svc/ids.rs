@@ -67,7 +67,8 @@ fn rand_bits_30() -> u32 {
 
 /// BJ 日钟字符串：`yyyyMMdd` / `yyyyMMddHHmmss`。
 fn bj_stamp(epoch_s: i64, with_time: bool) -> String {
-    let (y, mo, d, h, mi, s) = crate::chat_svc::civil_from_epoch(epoch_s + crate::chat_svc::BJ_OFFSET_S);
+    let (y, mo, d, h, mi, s) =
+        crate::chat_svc::civil_from_epoch(epoch_s + crate::chat_svc::BJ_OFFSET_S);
     if with_time {
         format!("{:04}{:02}{:02}{:02}{:02}{:02}", y, mo, d, h, mi, s)
     } else {
@@ -124,7 +125,9 @@ mod tests {
         let s = b32_small(0);
         assert_eq!(s, "aa"); // b"\x00" → 1 字节 → base32 "aa======"
         let s = b32_small(0xFFFFFFF);
-        assert!(s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+        assert!(s
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
         assert!(!s.contains('='));
     }
 
@@ -140,7 +143,12 @@ mod tests {
         assert!(mid.starts_with("msg_") && mid.split('_').nth(1).unwrap().len() == 14);
         let tid = gen_todo_id();
         assert!(tid.starts_with("td_"));
-        assert!(tid.split('_').nth(2).unwrap().chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(tid
+            .split('_')
+            .nth(2)
+            .unwrap()
+            .chars()
+            .all(|c| c.is_ascii_hexdigit()));
         let skid = gen_skip_id();
         assert!(skid.starts_with("sk_"));
     }

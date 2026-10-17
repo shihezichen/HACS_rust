@@ -25,11 +25,10 @@
 
 use hacs_l1_transport::web_gateway::{Gateway, HttpError, Reply};
 use hacs_l3_domain::chat_svc::{
-    ids, landing::normalize_landing, mentions::parse_text_mentions, store::ChatStore,
-    store::DbUnavailable, classify::*, iso_bj, now_epoch, memo_etag, memo_etag_ok, RequestError,
-    BODY_MAX, DEFAULT_PORT, MEMO_MAX_BYTES, MEMO_LIST_KEYS, MEMO_STR_KEYS,
-    PAGE_LIMIT_DEFAULT, SESSION_NOTE_MAX,
-    SESSION_TITLE_MAX, TEXT_MAX, TODO_MSG_EVIDENCE_TYPE, TODO_SORTS, TODO_STATUS,
+    classify::*, ids, iso_bj, landing::normalize_landing, memo_etag, memo_etag_ok,
+    mentions::parse_text_mentions, now_epoch, store::ChatStore, store::DbUnavailable, RequestError,
+    BODY_MAX, DEFAULT_PORT, MEMO_LIST_KEYS, MEMO_MAX_BYTES, MEMO_STR_KEYS, PAGE_LIMIT_DEFAULT,
+    SESSION_NOTE_MAX, SESSION_TITLE_MAX, TEXT_MAX, TODO_MSG_EVIDENCE_TYPE, TODO_SORTS, TODO_STATUS,
     TODO_TEXT_MAX,
 };
 use serde_json::{json, Value};
@@ -84,9 +83,15 @@ impl Roster {
         let mut members: Vec<Value> = Vec::new();
         let mut seen: Vec<String> = Vec::new();
         for path in paths {
-            let Ok(raw) = std::fs::read_to_string(&path) else { continue };
-            let Ok(data) = serde_json::from_str::<Value>(&raw) else { continue };
-            let Some(agents) = data.get("agents").and_then(Value::as_object) else { continue };
+            let Ok(raw) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(data) = serde_json::from_str::<Value>(&raw) else {
+                continue;
+            };
+            let Some(agents) = data.get("agents").and_then(Value::as_object) else {
+                continue;
+            };
             let node_id = data.get("node_id").and_then(Value::as_str).unwrap_or("");
             let host = data.get("host").and_then(Value::as_str).unwrap_or("");
             let node_port = data.get("port").and_then(Value::as_i64).unwrap_or(0);
@@ -108,7 +113,10 @@ impl Roster {
         Roster { members }
     }
     fn ids(&self) -> Vec<String> {
-        self.members.iter().filter_map(|m| m["id"].as_str().map(String::from)).collect()
+        self.members
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(String::from))
+            .collect()
     }
     fn agent_ids(&self) -> Vec<String> {
         self.ids()
@@ -156,11 +164,19 @@ fn in_tailnet(ip: &str) -> bool {
     if let Some(mapped) = text.strip_prefix("::ffff:") {
         text = mapped.to_string();
     }
-    let Some(addr) = text.parse::<std::net::Ipv4Addr>().ok() else { return false };
+    let Some(addr) = text.parse::<std::net::Ipv4Addr>().ok() else {
+        return false;
+    };
     if !cidr.is_empty() {
         if let Some((net, bits)) = cidr.split_once('/') {
-            if let (Ok(net_addr), Ok(bits)) = (net.parse::<std::net::Ipv4Addr>(), bits.parse::<u32>()) {
-                let mask = if bits == 0 { 0 } else { u32::MAX << (32 - bits) };
+            if let (Ok(net_addr), Ok(bits)) =
+                (net.parse::<std::net::Ipv4Addr>(), bits.parse::<u32>())
+            {
+                let mask = if bits == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - bits)
+                };
                 let a = u32::from(addr) & mask;
                 let n = u32::from(net_addr) & mask;
                 return a == n;
@@ -173,7 +189,11 @@ fn in_tailnet(ip: &str) -> bool {
     o[0] == 100 && (64..=127).contains(&o[1]) // 100.64.0.0/10
 }
 
-fn speaker(v: &Visitor, agent_hdr: Option<&str>, default_human: &str) -> (Option<String>, Option<String>) {
+fn speaker(
+    v: &Visitor,
+    agent_hdr: Option<&str>,
+    default_human: &str,
+) -> (Option<String>, Option<String>) {
     if let Some(a) = agent_hdr {
         if !a.trim().is_empty() && v.source == "tailnet" {
             return (Some("agent".into()), Some(a.trim().to_string()));
@@ -192,7 +212,11 @@ fn speaker(v: &Visitor, agent_hdr: Option<&str>, default_human: &str) -> (Option
 
 fn resolve_visitor(client_ip: &str) -> Option<Visitor> {
     if in_tailnet(client_ip) {
-        return Some(Visitor { username: None, role: "owner".into(), source: "tailnet".into() });
+        return Some(Visitor {
+            username: None,
+            role: "owner".into(),
+            source: "tailnet".into(),
+        });
     }
     None // cookie 会话：Rust 版未接 check_cookie（PARITY 登记）
 }
@@ -232,7 +256,10 @@ fn server_time() -> Value {
 
 fn db_err(e: DbUnavailable) -> HttpError {
     eprintln!("chat_svc DB 不可用：{}", e.0);
-    HttpError::json(503, json!({"ok": false, "error": {"code": "upstream_unavailable", "message": "数据库暂不可用"}}))
+    HttpError::json(
+        503,
+        json!({"ok": false, "error": {"code": "upstream_unavailable", "message": "数据库暂不可用"}}),
+    )
 }
 
 fn req_err(e: RequestError) -> HttpError {
@@ -247,9 +274,12 @@ fn req_err(e: RequestError) -> HttpError {
 }
 
 fn not_impl(method: &str, path: &str) -> HttpError {
-    HttpError::json(501, json!({"ok": false, "error": {
+    HttpError::json(
+        501,
+        json!({"ok": false, "error": {
         "code": "not_implemented",
-        "message": format!("本版尚未实现（契约 §12.4 实现顺序中）：{method} {path}")}}))
+        "message": format!("本版尚未实现（契约 §12.4 实现顺序中）：{method} {path}")}}),
+    )
 }
 
 // ---------------------------------------------------------------- 运行时
@@ -268,28 +298,47 @@ impl Rt {
         let s = self.db.session_json(&row).map_err(db_err)?;
         // 密级：owner 全看；认不出来的按 internal（role_can_see 口径）
         let sens = s["sensitivity"].as_str().unwrap_or("internal");
-        let rank_role = match role { "owner" => 3, "member" => 2, _ => 1 };
-        let rank_sens = match sens { "public" => 1, _ => 2 };
-        if rank_role >= rank_sens { Ok(Some(s)) } else { Ok(None) }
+        let rank_role = match role {
+            "owner" => 3,
+            "member" => 2,
+            _ => 1,
+        };
+        let rank_sens = match sens {
+            "public" => 1,
+            _ => 2,
+        };
+        if rank_role >= rank_sens {
+            Ok(Some(s))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn can_read(&self, v: &Visitor, session: &Value, agent_hdr: Option<&str>, default_human: &str) -> bool {
+    fn can_read(
+        &self,
+        v: &Visitor,
+        session: &Value,
+        agent_hdr: Option<&str>,
+        default_human: &str,
+    ) -> bool {
         if v.role == "owner" {
             return true;
         }
         let (_, me) = speaker(v, agent_hdr, default_human);
         match me {
             None => true,
-            Some(me) => session["member_ids"].as_array().map(|a| {
-                a.iter().filter_map(|x| x.as_str()).any(|m| m == me)
-            }).unwrap_or(false),
+            Some(me) => session["member_ids"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|x| x.as_str()).any(|m| m == me))
+                .unwrap_or(false),
         }
     }
 
-    fn require_visitor(req: &hacs_l1_transport::web_gateway::Request) -> Result<Visitor, HttpError> {
-        resolve_visitor(&req.client).ok_or_else(|| {
-            req_err(RequestError::new(401, "unauthorized", "需要登录"))
-        })
+    fn require_visitor(
+        req: &hacs_l1_transport::web_gateway::Request,
+    ) -> Result<Visitor, HttpError> {
+        resolve_visitor(&req.client)
+            .ok_or_else(|| req_err(RequestError::new(401, "unauthorized", "需要登录")))
     }
 
     fn json_body(req: &hacs_l1_transport::web_gateway::Request) -> Result<Value, HttpError> {
@@ -297,34 +346,57 @@ impl Rt {
             return Ok(json!({}));
         }
         if req.body.len() > BODY_MAX {
-            return Err(HttpError::json(413, json!({"ok": false, "error": {"code": "payload_too_large", "message": "请求体超限"}})));
+            return Err(HttpError::json(
+                413,
+                json!({"ok": false, "error": {"code": "payload_too_large", "message": "请求体超限"}}),
+            ));
         }
         let s = std::str::from_utf8(&req.body)
             .map_err(|_| req_err(RequestError::new(400, "bad_json", "请求体不是合法 JSON")))?;
         let v: Value = serde_json::from_str(s)
             .map_err(|_| req_err(RequestError::new(400, "bad_json", "请求体不是合法 JSON")))?;
         if !v.is_object() {
-            return Err(req_err(RequestError::new(400, "bad_json", "请求体必须是 JSON 对象")));
+            return Err(req_err(RequestError::new(
+                400,
+                "bad_json",
+                "请求体必须是 JSON 对象",
+            )));
         }
         Ok(v)
     }
 
-    fn memo_actor(&self, v: &Visitor, session: &Value, agent_hdr: Option<&str>, default_human: &str) -> Result<String, HttpError> {
+    fn memo_actor(
+        &self,
+        v: &Visitor,
+        session: &Value,
+        agent_hdr: Option<&str>,
+        default_human: &str,
+    ) -> Result<String, HttpError> {
         let (at, aid) = speaker(v, agent_hdr, default_human);
         let Some(aid) = aid else {
-            return Err(req_err(RequestError::new(400, "agent_id_required",
-                "tailnet 免登录不能以某个成员名义写入：请带 X-Agent-Id 头")));
+            return Err(req_err(RequestError::new(
+                400,
+                "agent_id_required",
+                "tailnet 免登录不能以某个成员名义写入：请带 X-Agent-Id 头",
+            )));
         };
         let Some(at) = at else {
-            return Err(req_err(RequestError::new(400, "agent_id_required",
-                "tailnet 免登录不能以某个成员名义写入：请带 X-Agent-Id 头")));
+            return Err(req_err(RequestError::new(
+                400,
+                "agent_id_required",
+                "tailnet 免登录不能以某个成员名义写入：请带 X-Agent-Id 头",
+            )));
         };
-        let in_group = session["member_ids"].as_array().map(|a| {
-            a.iter().filter_map(|x| x.as_str()).any(|m| m == aid)
-        }).unwrap_or(false);
+        let in_group = session["member_ids"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x.as_str()).any(|m| m == aid))
+            .unwrap_or(false);
         if at != "system" && !in_group {
-            return Err(req_err(RequestError::new(403, "not_a_member",
-                "只有本群成员能改本群成员表 / 群记忆")));
+            return Err(req_err(RequestError::new(
+                403,
+                "not_a_member",
+                "只有本群成员能改本群成员表 / 群记忆",
+            )));
         }
         Ok(aid)
     }
@@ -332,8 +404,11 @@ impl Rt {
     fn todo_write_guard(&self, session: &Value) -> Result<(), HttpError> {
         let state = session["state"].as_str().unwrap_or("open");
         if state != "open" {
-            return Err(req_err(RequestError::new(409, "read_only_archived",
-                &format!("群已归档（state={state}）：待办只读，写口全关"))));
+            return Err(req_err(RequestError::new(
+                409,
+                "read_only_archived",
+                &format!("群已归档（state={state}）：待办只读，写口全关"),
+            )));
         }
         Ok(())
     }
@@ -366,8 +441,11 @@ fn split_session_path(path: &str) -> Option<(String, String)> {
         Some((a, b)) => (a, b),
         None => (rest, ""),
     };
-    if sid.is_empty() || sid.len() > 64
-        || !sid.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    if sid.is_empty()
+        || sid.len() > 64
+        || !sid
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
         return None;
     }
@@ -376,8 +454,11 @@ fn split_session_path(path: &str) -> Option<(String, String)> {
 
 fn split_todo_path(path: &str) -> Option<String> {
     let tid = path.strip_prefix("/api/todos/")?;
-    if tid.is_empty() || tid.len() > 64
-        || !tid.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    if tid.is_empty()
+        || tid.len() > 64
+        || !tid
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
         return None;
     }
@@ -420,7 +501,10 @@ fn main() {
     gw.protocol_version = "HTTP/1.1".to_string();
 
     // ---- /healthz（GET/HEAD 公开口 + POST/PUT/PATCH/DELETE 同样 200，Python 原样）----
-    for methods in [&["GET", "HEAD"][..], &["POST", "PUT", "PATCH", "DELETE"][..]] {
+    for methods in [
+        &["GET", "HEAD"][..],
+        &["POST", "PUT", "PATCH", "DELETE"][..],
+    ] {
         let rt_h = rt.clone();
         gw.route("/healthz", methods, false, move |req| {
             let db_ok = rt_h.db.healthz_probe();
@@ -445,49 +529,86 @@ fn main() {
             Some(u) => (u.clone(), display_of(u)),
             None => (v.source.clone(), v.source.clone()),
         };
-        Ok(Reply::json(200, json!({
-            "ok": true,
-            "user": {"name": name, "display": disp, "role": v.role,
-                     "role_cn": if v.role == "owner" { "管理员" } else { "只读访客" },
-                     "source": v.source},
-            "caps": v.caps(), "server_time": server_time(),
-        })))
+        Ok(Reply::json(
+            200,
+            json!({
+                "ok": true,
+                "user": {"name": name, "display": disp, "role": v.role,
+                         "role_cn": if v.role == "owner" { "管理员" } else { "只读访客" },
+                         "source": v.source},
+                "caps": v.caps(), "server_time": server_time(),
+            }),
+        ))
     });
     let rt_h = rt.clone();
     gw.route("/api/agents", &["GET", "HEAD"], false, move |req| {
         let v = Rt::require_visitor(req)?;
         let _ = v;
-        let mut items: Vec<Value> = rt_h.roster.members.iter().map(|m| json!({
-            "id": m["id"], "display": m["display"],
-            "online": Value::Null, "busy": Value::Null, "last_hb_at": Value::Null,
-            "meta": {"node_id": m["node_id"], "host": m["host"],
-                     "model": m["model"], "description": m["description"]},
-        })).collect();
-        items.sort_by(|a, b| a["id"].as_str().unwrap_or("").cmp(b["id"].as_str().unwrap_or("")));
-        Ok(Reply::json(200, json!({"ok": true, "agents": items, "server_time": server_time()})))
+        let mut items: Vec<Value> = rt_h
+            .roster
+            .members
+            .iter()
+            .map(|m| {
+                json!({
+                    "id": m["id"], "display": m["display"],
+                    "online": Value::Null, "busy": Value::Null, "last_hb_at": Value::Null,
+                    "meta": {"node_id": m["node_id"], "host": m["host"],
+                             "model": m["model"], "description": m["description"]},
+                })
+            })
+            .collect();
+        items.sort_by(|a, b| {
+            a["id"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["id"].as_str().unwrap_or(""))
+        });
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "agents": items, "server_time": server_time()}),
+        ))
     });
 
     // ---- GET /api/sessions（列表）---------------------------------------
     let rt_h = rt.clone();
     gw.route("/api/sessions", &["GET", "HEAD"], false, move |req| {
         let v = Rt::require_visitor(req)?;
-        let limit = clamp_i64(one(&req.query, "limit").and_then(|s| s.parse().ok()),
-            1, PAGE_LIMIT_MAX, PAGE_LIMIT_DEFAULT);
+        let limit = clamp_i64(
+            one(&req.query, "limit").and_then(|s| s.parse().ok()),
+            1,
+            PAGE_LIMIT_MAX,
+            PAGE_LIMIT_DEFAULT,
+        );
         let kind = one(&req.query, "kind").filter(|s| !s.is_empty());
         if let Some(k) = &kind {
             if k != "dm" && k != "meet" {
-                return Err(req_err(RequestError::new(422, "bad_kind", "kind 只能是 dm / meet")));
+                return Err(req_err(RequestError::new(
+                    422,
+                    "bad_kind",
+                    "kind 只能是 dm / meet",
+                )));
             }
         }
         let state = one(&req.query, "state").filter(|s| !s.is_empty());
         let member = one(&req.query, "member").filter(|s| !s.is_empty());
         let cursor = one(&req.query, "cursor").filter(|s| !s.is_empty());
-        let mut sessions = rt_h.db.list_sessions(
-            kind.as_deref(), state.as_deref(), member.as_deref(), cursor.as_deref(), limit,
-        ).map_err(db_err)?;
+        let mut sessions = rt_h
+            .db
+            .list_sessions(
+                kind.as_deref(),
+                state.as_deref(),
+                member.as_deref(),
+                cursor.as_deref(),
+                limit,
+            )
+            .map_err(db_err)?;
         // 密级过滤
-        sessions.retain(|s| rt_h.get_session(s["session_id"].as_str().unwrap_or(""), &v.role)
-            .ok().flatten().is_some());
+        sessions.retain(|s| {
+            rt_h.get_session(s["session_id"].as_str().unwrap_or(""), &v.role)
+                .ok()
+                .flatten()
+                .is_some()
+        });
         let mut out: Vec<Value> = Vec::new();
         for s in sessions {
             let sid = s["session_id"].as_str().unwrap_or("").to_string();
@@ -511,12 +632,16 @@ fn main() {
             out.push(row);
         }
         let next_cursor = if out.len() as i64 == limit && !out.is_empty() {
-            out.last().and_then(|o| o["updated_at"].as_str().map(String::from))
+            out.last()
+                .and_then(|o| o["updated_at"].as_str().map(String::from))
         } else {
             None
         };
-        Ok(Reply::json(200, json!({"ok": true, "count": out.len(),
-            "next_cursor": next_cursor, "sessions": out, "server_time": server_time()})))
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "count": out.len(),
+            "next_cursor": next_cursor, "sessions": out, "server_time": server_time()}),
+        ))
     });
 
     // ---- POST /api/sessions（建群）--------------------------------------
@@ -527,19 +652,38 @@ fn main() {
         let agent_hdr = req.header("X-Agent-Id");
         let (at, aid) = speaker(&v, agent_hdr, &rt_h.default_human);
         if at.as_deref() != Some("human") {
-            return Err(req_err(RequestError::new(403, "creator_required", "建群必须由人发起（请先登录）")));
+            return Err(req_err(RequestError::new(
+                403,
+                "creator_required",
+                "建群必须由人发起（请先登录）",
+            )));
         }
         let author_id = aid.unwrap_or_default();
-        let kind = body.get("kind").and_then(Value::as_str).unwrap_or("meet").trim().to_string();
+        let kind = body
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("meet")
+            .trim()
+            .to_string();
         if kind != "dm" && kind != "meet" {
-            return Err(req_err(RequestError::new(422, "bad_kind", "kind 只能是 dm / meet")));
+            return Err(req_err(RequestError::new(
+                422,
+                "bad_kind",
+                "kind 只能是 dm / meet",
+            )));
         }
         let roster_ids = rt_h.roster.ids();
         let wanted = body.get("members");
         let wanted: Vec<Value> = match wanted {
             None => vec![],
             Some(Value::Array(a)) => a.clone(),
-            Some(_) => return Err(req_err(RequestError::new(422, "bad_members", "members 必须是数组"))),
+            Some(_) => {
+                return Err(req_err(RequestError::new(
+                    422,
+                    "bad_members",
+                    "members 必须是数组",
+                )))
+            }
         };
         let mut members = vec![author_id.clone()];
         for raw in wanted {
@@ -548,8 +692,11 @@ fn main() {
                 continue;
             }
             if !roster_ids.contains(&mid) {
-                return Err(req_err(RequestError::new(422, "unknown_member",
-                &format!("成员不存在：{mid}"))));
+                return Err(req_err(RequestError::new(
+                    422,
+                    "unknown_member",
+                    &format!("成员不存在：{mid}"),
+                )));
             }
             members.push(mid);
         }
@@ -558,20 +705,32 @@ fn main() {
         let dd = &now[8..10];
         let hh = &now[11..13];
         let mi = &now[14..16];
-        let title = body.get("title").and_then(Value::as_str).map(str::trim)
+        let title = body
+            .get("title")
+            .and_then(Value::as_str)
+            .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| s.chars().take(120).collect::<String>())
             .unwrap_or_else(|| format!("临时群 · {mm}月{dd}日 {hh}:{mi}"));
         let session_id = ids::gen_session_id("meet");
-        let created = rt_h.db.create_session(&session_id, &kind, &title, &members,
-            &author_id, "internal",
-            body.get("client_ref").and_then(Value::as_str));
+        let created = rt_h.db.create_session(
+            &session_id,
+            &kind,
+            &title,
+            &members,
+            &author_id,
+            "internal",
+            body.get("client_ref").and_then(Value::as_str),
+        );
         let row = created.map_err(db_err)?;
         let Some(row) = row else {
             return Err(req_err(RequestError::new(500, "create_failed", "建群失败")));
         };
         let session = rt_h.db.session_json(&row).map_err(db_err)?;
-        Ok(Reply::json(201, json!({"ok": true, "session": session, "server_time": server_time()})))
+        Ok(Reply::json(
+            201,
+            json!({"ok": true, "session": session, "server_time": server_time()}),
+        ))
     });
 
     // ---- /api/sessions/{sid}/... 写端点（前缀登记，二次判形）--------------
@@ -1431,8 +1590,11 @@ fn main() {
             return Err(not_impl(&req.method, &req.path));
         }
         // 非 /api：静态/SPA 兜底，Rust 版未带 ui/ → 404（PARITY 登记）
-        Ok(Reply::json(404, json!({"ok": false, "error": {
-            "code": "not_found", "message": "静态资源不存在"}})))
+        Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": {
+            "code": "not_found", "message": "静态资源不存在"}}),
+        ))
     });
 
     eprintln!("chat_svc starting host={host} port={port}");
@@ -1449,39 +1611,79 @@ fn memo_doc(body: &Value) -> Result<Value, HttpError> {
     let mut doc = serde_json::Map::new();
     for key in MEMO_STR_KEYS {
         let v = body.get(key).cloned().unwrap_or(Value::Null);
-        let s = v.as_str().unwrap_or("").trim().chars().take(4000).collect::<String>();
+        let s = v
+            .as_str()
+            .unwrap_or("")
+            .trim()
+            .chars()
+            .take(4000)
+            .collect::<String>();
         doc.insert(key.to_string(), json!(s));
     }
     for key in MEMO_LIST_KEYS {
         match body.get(key) {
-            None => { doc.insert(key.to_string(), json!([])); }
-            Some(Value::Array(a)) => { doc.insert(key.to_string(), json!(a)); }
+            None => {
+                doc.insert(key.to_string(), json!([]));
+            }
+            Some(Value::Array(a)) => {
+                doc.insert(key.to_string(), json!(a));
+            }
             Some(_) => {
-                return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("{key} 必须是数组"))));
+                return Err(req_err(RequestError::new(
+                    422,
+                    "bad_memo",
+                    &format!("{key} 必须是数组"),
+                )));
             }
         }
     }
-    let mut unknown: Vec<String> = body.as_object().map(|o| {
-        o.keys().filter(|k| !MEMO_STR_KEYS.contains(&k.as_str()) && !MEMO_LIST_KEYS.contains(&k.as_str())).cloned().collect()
-    }).unwrap_or_default();
+    let mut unknown: Vec<String> = body
+        .as_object()
+        .map(|o| {
+            o.keys()
+                .filter(|k| {
+                    !MEMO_STR_KEYS.contains(&k.as_str()) && !MEMO_LIST_KEYS.contains(&k.as_str())
+                })
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
     unknown.sort();
     if !unknown.is_empty() {
-        return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("未知字段：{}", unknown.join("、")))));
+        return Err(req_err(RequestError::new(
+            422,
+            "bad_memo",
+            &format!("未知字段：{}", unknown.join("、")),
+        )));
     }
-    if let Some(tasks) = doc.get_mut("open_tasks").and_then(Value::as_array_mut).cloned() {
+    if let Some(tasks) = doc
+        .get_mut("open_tasks")
+        .and_then(Value::as_array_mut)
+        .cloned()
+    {
         for (idx, item) in tasks.iter().enumerate() {
             if !item.is_object() {
-                return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("open_tasks[{idx}] 必须是对象"))));
+                return Err(req_err(RequestError::new(
+                    422,
+                    "bad_memo",
+                    &format!("open_tasks[{idx}] 必须是对象"),
+                )));
             }
             let blocked = item.get("blocked_by");
             let fixed: Vec<String> = match blocked {
                 None => vec![],
-                Some(Value::Array(a)) => a.iter().map(|x| x.as_str().unwrap_or("").trim().to_string()).filter(|s| !s.is_empty()).collect(),
-                Some(_) => return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("open_tasks[{idx}].blocked_by 必须是数组")))),
+                Some(Value::Array(a)) => a
+                    .iter()
+                    .map(|x| x.as_str().unwrap_or("").trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect(),
+                Some(_) => {
+                    return Err(req_err(RequestError::new(
+                        422,
+                        "bad_memo",
+                        &format!("open_tasks[{idx}].blocked_by 必须是数组"),
+                    )))
+                }
             };
             // fixed 写回
             if let Some(arr) = doc.get_mut("open_tasks").and_then(Value::as_array_mut) {
@@ -1491,8 +1693,14 @@ fn memo_doc(body: &Value) -> Result<Value, HttpError> {
     }
     let raw = serde_json::to_vec(&Value::Object(doc.clone())).unwrap_or_default();
     if raw.len() > MEMO_MAX_BYTES {
-        return Err(req_err(RequestError::new(413, "memo_too_large",
-                &format!("记忆超过 {} KB，请只留要点、明细留原消息", MEMO_MAX_BYTES / 1024))));
+        return Err(req_err(RequestError::new(
+            413,
+            "memo_too_large",
+            &format!(
+                "记忆超过 {} KB，请只留要点、明细留原消息",
+                MEMO_MAX_BYTES / 1024
+            ),
+        )));
     }
     Ok(Value::Object(doc))
 }
@@ -1500,30 +1708,65 @@ fn memo_doc(body: &Value) -> Result<Value, HttpError> {
 /// memo PATCH 只追加（数组追加、标量覆盖）。
 fn memo_merge(current: Value, patch: &Value) -> Result<Value, HttpError> {
     if !patch.is_object() || patch.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        return Err(req_err(RequestError::new(422, "empty_patch", "PATCH 至少要带一个要改的字段")));
+        return Err(req_err(RequestError::new(
+            422,
+            "empty_patch",
+            "PATCH 至少要带一个要改的字段",
+        )));
     }
     let mut doc = serde_json::Map::new();
     for key in MEMO_STR_KEYS {
-        doc.insert(key.to_string(), json!(current.get(key).and_then(Value::as_str).unwrap_or("")));
+        doc.insert(
+            key.to_string(),
+            json!(current.get(key).and_then(Value::as_str).unwrap_or("")),
+        );
     }
     for key in MEMO_LIST_KEYS {
-        doc.insert(key.to_string(), json!(current.get(key).and_then(Value::as_array).cloned().unwrap_or_default()));
+        doc.insert(
+            key.to_string(),
+            json!(current
+                .get(key)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()),
+        );
     }
     for (key, value) in patch.as_object().unwrap() {
         if MEMO_LIST_KEYS.contains(&key.as_str()) {
             if !value.is_array() {
-                return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("{key} 必须是数组"))));
+                return Err(req_err(RequestError::new(
+                    422,
+                    "bad_memo",
+                    &format!("{key} 必须是数组"),
+                )));
             }
-            let mut merged = doc.get(key).and_then(Value::as_array).cloned().unwrap_or_default();
+            let mut merged = doc
+                .get(key)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             merged.extend(value.as_array().cloned().unwrap_or_default());
             doc.insert(key.clone(), json!(merged));
         } else if MEMO_STR_KEYS.contains(&key.as_str()) {
-            let s = value.as_str().unwrap_or("").trim().chars().take(4000).collect::<String>();
+            let s = value
+                .as_str()
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take(4000)
+                .collect::<String>();
             doc.insert(key.clone(), json!(s));
         } else {
-            return Err(req_err(RequestError::new(422, "bad_memo",
-                &format!("PATCH 只追加 {} / 覆盖 {}，收到：{}", MEMO_LIST_KEYS.join("、"), MEMO_STR_KEYS.join("、"), key))));
+            return Err(req_err(RequestError::new(
+                422,
+                "bad_memo",
+                &format!(
+                    "PATCH 只追加 {} / 覆盖 {}，收到：{}",
+                    MEMO_LIST_KEYS.join("、"),
+                    MEMO_STR_KEYS.join("、"),
+                    key
+                ),
+            )));
         }
     }
     memo_doc(&Value::Object(doc))
@@ -1532,40 +1775,83 @@ fn memo_merge(current: Value, patch: &Value) -> Result<Value, HttpError> {
 /// #448：agent 回复里的队列声明（只校验不落库）。
 fn todo_declare_plan(rt: &Rt, sid: &str, actor: &str, decl: &Value) -> Result<Value, HttpError> {
     if !decl.is_object() {
-        return Err(req_err(RequestError::new(422, "bad_todo", "todo 需是对象 {id, status, landing}")));
+        return Err(req_err(RequestError::new(
+            422,
+            "bad_todo",
+            "todo 需是对象 {id, status, landing}",
+        )));
     }
-    for k in decl.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default() {
+    for k in decl
+        .as_object()
+        .map(|o| o.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default()
+    {
         if !["id", "status", "landing"].contains(&k.as_str()) {
-            return Err(req_err(RequestError::new(422, "bad_todo",
-                &format!("todo 未知字段：{k}"))));
+            return Err(req_err(RequestError::new(
+                422,
+                "bad_todo",
+                &format!("todo 未知字段：{k}"),
+            )));
         }
     }
-    let todo_id = decl.get("id").and_then(Value::as_str).unwrap_or("").trim().to_string();
-    let status = decl.get("status").and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let todo_id = decl
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let status = decl
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
     if todo_id.is_empty() {
         return Err(req_err(RequestError::new(422, "bad_todo", "todo 需给 id")));
     }
     if !TODO_STATUS.contains(&status.as_str()) {
-        return Err(req_err(RequestError::new(422, "bad_status",
-                &format!("status 只能是 {}", TODO_STATUS.join("、")))));
+        return Err(req_err(RequestError::new(
+            422,
+            "bad_status",
+            &format!("status 只能是 {}", TODO_STATUS.join("、")),
+        )));
     }
-    let item = rt.db.todo_get(&todo_id).map_err(db_err)?
+    let item = rt
+        .db
+        .todo_get(&todo_id)
+        .map_err(db_err)?
         .ok_or_else(|| req_err(RequestError::new(404, "not_found", "待办不存在")))?;
     if item["session_id"].as_str() != Some(sid) {
         return Err(req_err(RequestError::new(404, "not_found", "待办不存在")));
     }
     if item["owner"].as_str() != Some(actor) {
-        return Err(req_err(RequestError::new(403, "not_your_field",
-                &format!("只能改 owner=自己的条目（本条 owner={}）", item["owner"].as_str().unwrap_or("")))));
+        return Err(req_err(RequestError::new(
+            403,
+            "not_your_field",
+            &format!(
+                "只能改 owner=自己的条目（本条 owner={}）",
+                item["owner"].as_str().unwrap_or("")
+            ),
+        )));
     }
     let (landing, evidences) = normalize_landing(decl.get("landing")).map_err(req_err)?;
     if status == "done" {
-        let have = !landing.is_empty() || !evidences.is_empty()
-            || item["landing"].as_array().map(|a| !a.is_empty()).unwrap_or(false)
-            || item["evidences"].as_array().map(|a| !a.is_empty()).unwrap_or(false);
+        let have = !landing.is_empty()
+            || !evidences.is_empty()
+            || item["landing"]
+                .as_array()
+                .map(|a| !a.is_empty())
+                .unwrap_or(false)
+            || item["evidences"]
+                .as_array()
+                .map(|a| !a.is_empty())
+                .unwrap_or(false);
         if !have {
-            return Err(req_err(RequestError::new(422, "no_landing",
-                "不能自盖完成章：status=done 需先交落点（landing），落点为空，条目继续挂原状态")));
+            return Err(req_err(RequestError::new(
+                422,
+                "no_landing",
+                "不能自盖完成章：status=done 需先交落点（landing），落点为空，条目继续挂原状态",
+            )));
         }
     }
     Ok(json!({"id": todo_id, "status": status, "actor": actor,
@@ -1578,36 +1864,66 @@ fn todo_declare_apply(rt: &Rt, plan: &Value) -> Result<Value, HttpError> {
     let status = plan["status"].as_str().unwrap_or("");
     let actor = plan["actor"].as_str().unwrap_or("");
     if status == "open" {
-        return rt.db.todo_reopen(todo_id).map_err(db_err)?
+        return rt
+            .db
+            .todo_reopen(todo_id)
+            .map_err(db_err)?
             .ok_or_else(|| req_err(RequestError::new(404, "not_found", "待办不存在")));
     }
     if status == "doing" {
-        return rt.db.todo_mark_doing(todo_id).map_err(db_err)?
+        return rt
+            .db
+            .todo_mark_doing(todo_id)
+            .map_err(db_err)?
             .ok_or_else(|| req_err(RequestError::new(404, "not_found", "待办不存在")));
     }
     let now = iso_bj(now_epoch());
-    let stamped: Vec<Value> = plan["evidences"].as_array().map(|a| {
-        a.iter().map(|e| {
-            let mut c = e.clone();
-            c["by"] = json!(actor);
-            c["validated_at"] = json!(now);
-            c
-        }).collect()
-    }).unwrap_or_default();
-    let landing: Vec<String> = plan["landing"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect::<Vec<String>>()).unwrap_or_default();
-    rt.db.todo_mark_done(todo_id, actor, &stamped, &landing).map_err(db_err)?
+    let stamped: Vec<Value> = plan["evidences"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|e| {
+                    let mut c = e.clone();
+                    c["by"] = json!(actor);
+                    c["validated_at"] = json!(now);
+                    c
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let landing: Vec<String> = plan["landing"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect::<Vec<String>>()
+        })
+        .unwrap_or_default();
+    rt.db
+        .todo_mark_done(todo_id, actor, &stamped, &landing)
+        .map_err(db_err)?
         .ok_or_else(|| req_err(RequestError::new(404, "not_found", "待办不存在")))
 }
 
 /// 人 @agent 派活 → 自动入队（意图闸门 + 幂等 + 回执翻状态）。任何异常只告警不阻断。
-fn todo_autotrack(rt: &Rt, _session: &Value, sid: &str, author_id: &str,
-                  mentions: &[String], message: &Value) -> Option<Value> {
+fn todo_autotrack(
+    rt: &Rt,
+    _session: &Value,
+    sid: &str,
+    author_id: &str,
+    mentions: &[String],
+    message: &Value,
+) -> Option<Value> {
     let result: Result<Option<Value>, String> = (|| {
         let agents = rt.roster.agent_ids();
         if agents.is_empty() || agents.iter().any(|a| a == author_id) {
             return Ok(None); // agent 之间互相 @：不入队
         }
-        let targets: Vec<String> = mentions.iter().filter(|m| agents.contains(m)).cloned().collect();
+        let targets: Vec<String> = mentions
+            .iter()
+            .filter(|m| agents.contains(m))
+            .cloned()
+            .collect();
         if targets.is_empty() {
             return Ok(None);
         }
@@ -1626,16 +1942,33 @@ fn todo_autotrack(rt: &Rt, _session: &Value, sid: &str, author_id: &str,
                 }
             }
             let seq = message["seq"].as_i64().map(|s| s as i32);
-            let key = rt.db.todo_skip_create(sid, seq,
-                message["message_id"].as_str().unwrap_or(""), author_id, owner,
-                verdict["intent"].as_str().unwrap_or("followup"),
-                verdict["reason"].as_str().unwrap_or(""),
-                &verdict["hits"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect::<Vec<String>>()).unwrap_or_default(),
-                raw).map_err(|e| e.0)?;
+            let key = rt
+                .db
+                .todo_skip_create(
+                    sid,
+                    seq,
+                    message["message_id"].as_str().unwrap_or(""),
+                    author_id,
+                    owner,
+                    verdict["intent"].as_str().unwrap_or("followup"),
+                    verdict["reason"].as_str().unwrap_or(""),
+                    &verdict["hits"]
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(String::from))
+                                .collect::<Vec<String>>()
+                        })
+                        .unwrap_or_default(),
+                    raw,
+                )
+                .map_err(|e| e.0)?;
             if key.is_some() {
                 // 只有本次真新增了台账行才 +1
                 if let Some(target) = todo_followup_target(rt, sid, owner) {
-                    let _ = rt.db.todo_bump_followup(target["id"].as_str().unwrap_or(""));
+                    let _ = rt
+                        .db
+                        .todo_bump_followup(target["id"].as_str().unwrap_or(""));
                 }
             }
             return Ok(None);
@@ -1658,8 +1991,21 @@ fn todo_autotrack(rt: &Rt, _session: &Value, sid: &str, author_id: &str,
                 return Ok(None); // 幂等：已在队列里且未完成
             }
         }
-        let item = rt.db.todo_create(sid, &text, owner, "confirm", None,
-            author_id, &[], "task", &name, "").map_err(|e| e.0)?;
+        let item = rt
+            .db
+            .todo_create(
+                sid,
+                &text,
+                owner,
+                "confirm",
+                None,
+                author_id,
+                &[],
+                "task",
+                &name,
+                "",
+            )
+            .map_err(|e| e.0)?;
         Ok(item)
     })();
     match result {
@@ -1678,7 +2024,10 @@ fn todo_followup_target(rt: &Rt, sid: &str, owner: &str) -> Option<Value> {
         return None;
     }
     for status in ["open", "doing"] {
-        let cand: Vec<&Value> = rows.iter().filter(|r| r["status"].as_str() == Some(status)).collect();
+        let cand: Vec<&Value> = rows
+            .iter()
+            .filter(|r| r["status"].as_str() == Some(status))
+            .collect();
         if let Some(last) = cand.last() {
             return Some((*last).clone());
         }
@@ -1687,8 +2036,14 @@ fn todo_followup_target(rt: &Rt, sid: &str, owner: &str) -> Option<Value> {
 }
 
 /// agent 回群报进度 → 翻自己的在办条目（否定词优先；引用优先；单条兜底）。
-fn todo_reply_autotrack(rt: &Rt, sid: &str, author_id: &str, text: &str,
-                        message: &Value, decl: Option<&Value>) -> Vec<Value> {
+fn todo_reply_autotrack(
+    rt: &Rt,
+    sid: &str,
+    author_id: &str,
+    text: &str,
+    message: &Value,
+    decl: Option<&Value>,
+) -> Vec<Value> {
     let result: Result<Vec<Value>, String> = (|| {
         let agents = rt.roster.agent_ids();
         if agents.is_empty() || !agents.iter().any(|a| a == author_id) {
@@ -1700,8 +2055,13 @@ fn todo_reply_autotrack(rt: &Rt, sid: &str, author_id: &str, text: &str,
         if !done && !doing {
             return Ok(vec![]);
         }
-        let pending: Vec<Value> = rt.db.todos_list(sid, Some(author_id), None).map_err(|e| e.0)?
-            .into_iter().filter(|r| matches!(r["status"].as_str(), Some("open") | Some("doing"))).collect();
+        let pending: Vec<Value> = rt
+            .db
+            .todos_list(sid, Some(author_id), None)
+            .map_err(|e| e.0)?
+            .into_iter()
+            .filter(|r| matches!(r["status"].as_str(), Some("open") | Some("doing")))
+            .collect();
         if pending.is_empty() {
             return Ok(vec![]);
         }
@@ -1755,7 +2115,9 @@ fn todo_reply_autotrack(rt: &Rt, sid: &str, author_id: &str, text: &str,
         for row in &hits {
             let tid = row["id"].as_str().unwrap_or("");
             let item = if done {
-                rt.db.todo_mark_done(tid, author_id, &evidences, &landing).map_err(|e| e.0)?
+                rt.db
+                    .todo_mark_done(tid, author_id, &evidences, &landing)
+                    .map_err(|e| e.0)?
             } else if row["status"].as_str() == Some("open") {
                 rt.db.todo_mark_doing(tid).map_err(|e| e.0)?
             } else {
@@ -1789,4 +2151,3 @@ fn todo_landing_candidates(text: &str) -> Vec<String> {
 }
 
 use hacs_l3_domain::chat_svc::landing::{has_http_code, is_commit};
-

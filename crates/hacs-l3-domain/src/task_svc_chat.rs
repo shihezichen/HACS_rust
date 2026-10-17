@@ -88,7 +88,8 @@ fn http_post_json(
         .map_err(|e| format!("解析地址失败: {e}"))?
         .next()
         .ok_or("无可用地址")?;
-    let mut sock = TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("连不上: {e}"))?;
+    let mut sock =
+        TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("连不上: {e}"))?;
     sock.set_read_timeout(Some(timeout)).ok();
     sock.set_write_timeout(Some(timeout)).ok();
     let mut req = Vec::new();
@@ -104,7 +105,8 @@ fn http_post_json(
     sock.write_all(&req).map_err(|e| format!("发送失败: {e}"))?;
     sock.flush().ok();
     let mut raw = Vec::new();
-    sock.read_to_end(&mut raw).map_err(|e| format!("读取失败: {e}"))?;
+    sock.read_to_end(&mut raw)
+        .map_err(|e| format!("读取失败: {e}"))?;
     let split = raw
         .windows(4)
         .position(|w| w == b"\r\n\r\n")

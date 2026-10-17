@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>团队黑板 · 共享内容看板</title>
+<style>
+:root{
+  --bg:#0f1116; --panel:#161a22; --panel2:#1c212b; --line:#2a3140;
+  --fg:#e7eaf0; --dim:#98a2b3; --accent:#5b9cff; --ok:#3fb950;
+  --warn:#d29922; --err:#f85149; --chip:#232a36;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Source Han Sans SC",
+    system-ui,-apple-system,"Segoe UI",sans-serif;
+  /* 流体字号：手机上不至于小到看不清，桌面上也不会糊一屏大字 */
+  font-size:clamp(13px,2.4vw,14px); line-height:1.7;
+  overflow-x:hidden;                     /* 兜底：整页永远不横向滚 */
+}
+.wrap{max-width:1180px;margin:0 auto;padding:clamp(10px,2.2vw,16px) clamp(10px,2.2vw,16px) 48px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+h1{font-size:clamp(16px,3.8vw,19px);margin:0;font-weight:600;letter-spacing:.5px}
+.sub{color:var(--dim);font-size:12px}
+.lights{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.light{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--err)} .dot.warn{background:var(--warn)}
+.light b{color:var(--fg);font-weight:600}
+
+#banner{display:none;margin:10px 0;padding:8px 12px;border-radius:6px;
+  background:rgba(210,153,34,.14);border:1px solid var(--warn);color:#f0d68c;font-size:13px}
+#banner.on{display:block}
+
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bar .grow{flex:1 1 260px;display:flex;gap:8px;align-items:center;min-width:240px}
+input[type=text],select{
+  background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+  border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;outline:none}
+input[type=text]{width:100%}
+input[type=text]:focus,select:focus{border-color:var(--accent)}
+button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+  border-radius:6px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;
+  flex:none;white-space:nowrap}
+button:hover{border-color:var(--accent);color:#fff}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:none}
+.seg button{border:0;border-radius:0;padding:6px 12px;background:transparent;color:var(--dim)}
+.seg button.on{background:var(--accent);color:#fff;font-weight:600}
+label.chk{display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:13px;cursor:pointer}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.filters .lb{color:var(--dim);font-size:12px}
+.count{color:var(--dim);font-size:13px;margin-left:auto}
+.count b{color:var(--fg)}
+
+#list{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
+  border-radius:8px;padding:10px 12px;cursor:pointer}
+.card:hover{border-color:#3a4152;border-left-color:var(--accent)}
+.card.open{border-left-color:var(--accent)}
+.meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+.id{font-family:Consolas,"Courier New",monospace;color:var(--accent);font-weight:700}
+.chip{background:var(--chip);border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--fg)}
+.chip.author{color:#7ee787} .chip.topic{color:#79c0ff} .chip.kind{color:#d2a8ff}
+.chip.score{color:#ffb86b}
+.time{margin-left:auto;white-space:nowrap}
+.content{margin-top:7px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;color:#dfe4ec}
+.content.clip{max-height:4.8em;overflow:hidden;
+  -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.more{margin-top:4px;color:var(--accent);font-size:12px}
+.refs{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap}
+.ref{background:var(--chip);border:1px dashed var(--line);border-radius:4px;
+  padding:0 6px;font-size:11.5px;color:var(--dim)}
+.empty{text-align:center;color:var(--dim);padding:44px 12px;border:1px dashed var(--line);border-radius:8px}
+footer{margin-top:20px;color:var(--dim);font-size:12px;text-align:center}
+
+/* --- 一级导航：会议 / 共享内容 / 跟踪（手机上平分一行，触摸目标 ≥44px）--- */
+.tabs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 2px}
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.tabs button{border:0;border-radius:0;padding:8px 20px;background:transparent;color:var(--dim);
+  font-size:clamp(13px,2.8vw,14px);min-height:40px}
+.tabs button.on{background:var(--accent);color:#fff;font-weight:600}
+.tabs.sub button{padding:6px 14px;font-size:clamp(12px,2.6vw,13px);min-height:36px}
+.pane{display:none} .pane.on{display:block}
+.bar .lb{color:var(--dim);font-size:12px;flex:none}
+
+/* --- 会议视图 --- */
+.meetgrid{display:grid;grid-template-columns:330px 1fr;gap:12px;margin-top:14px;align-items:start}
+.mlist{display:flex;flex-direction:column;gap:8px;max-height:74vh;overflow:auto}
+.scard{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
+  border-radius:8px;padding:8px 10px;cursor:pointer}
+.scard:hover{border-color:#3a4152}
+.scard.on{border-left-color:var(--accent);background:var(--panel2)}
+.scard .q{margin:5px 0;color:var(--dim);font-size:12.5px;max-height:3.4em;overflow:hidden;
+  word-break:break-word}
+.badge{border-radius:4px;padding:1px 7px;font-size:11.5px;border:1px solid var(--line);color:var(--dim)}
+.badge.running{color:#79c0ff;border-color:#2f5f96}
+.badge.converged{color:#7ee787;border-color:#2c6b3f}
+.badge.timeout{color:#ffb86b;border-color:#8a6520}
+.badge.aborted{color:#ff8a80;border-color:#8a2f2f}
+.badge.ok{color:#7ee787;border-color:#2c6b3f}
+.badge.absent{color:#98a2b3}
+.badge.error{color:#ff8a80;border-color:#8a2f2f}
+.mdetail{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;min-height:220px}
+.qfull{margin-top:6px;font-size:14.5px;color:#eef2f8;white-space:pre-wrap;word-break:break-word}
+.concl{margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid #2c6b3f;
+  background:rgba(63,185,80,.10);white-space:pre-wrap;word-break:break-word;color:#dff5e3}
+.concl.none{border-color:var(--line);background:var(--panel2);color:var(--dim)}
+.roundhead{margin:16px 0 8px;color:var(--accent);font-size:13px;font-weight:600;
+  border-bottom:1px solid var(--line);padding-bottom:4px}
+.turn{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;
+  background:var(--panel2)}
+.turn .why{margin-top:6px;color:#f0b6b0;font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+.linkid{background:var(--chip);border:1px solid var(--accent);border-radius:4px;padding:0 6px;
+  font-size:11.5px;color:var(--accent);cursor:pointer}
+.card.hit{border-color:var(--accent)}
+
+/* --- 会议四要素：目标 / 议程 / 当场确认 / 落实·遗留 --- */
+.goal{margin-top:8px;padding:8px 12px;border-radius:8px;border:1px solid #2f5f96;
+  background:rgba(91,156,255,.10);color:#dce9ff;font-size:15px;font-weight:600;
+  white-space:pre-wrap;word-break:break-word}
+.goal.none{border-color:var(--line);background:var(--panel2);color:var(--dim);font-weight:400}
+.sect{margin:14px 0 6px;color:var(--fg);font-size:13px;font-weight:600;
+  border-bottom:1px solid var(--line);padding-bottom:4px;display:flex;gap:8px;align-items:center}
+.sect .n{color:var(--dim);font-weight:400;font-size:12px}
+.item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;
+  background:var(--panel2)}
+.item .t{font-size:13.5px;color:#eef2f8;word-break:break-word}
+.item .k{color:var(--dim);font-size:12.5px;margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.item .k b{color:#cfd6e2;font-weight:600}
+.badge.pending{color:#98a2b3}
+.badge.concluded{color:#7ee787;border-color:#2c6b3f}
+.badge.deferred{color:#ffb86b;border-color:#8a6520}
+.badge.agree{color:#7ee787;border-color:#2c6b3f}
+.badge.object{color:#ff8a80;border-color:#8a2f2f}
+.badge.abstain{color:#98a2b3}
+.badge.late{color:#ff8a80;border-color:#8a2f2f}
+.badge.open{color:#79c0ff;border-color:#2f5f96}
+.badge.doing{color:#ffb86b;border-color:#8a6520}
+.badge.done{color:#7ee787;border-color:#2c6b3f}
+.badge.dropped{color:#98a2b3}
+.badge.watching{color:#ffb86b;border-color:#8a6520}
+.badge.closed{color:#7ee787;border-color:#2c6b3f}
+.vote{margin-top:8px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--dim);font-size:13px}
+.vote.pass{border-color:#2c6b3f;background:rgba(63,185,80,.10);color:#dff5e3}
+.vote.fail{border-color:var(--warn);background:rgba(210,153,34,.12);color:#f0d68c}
+.vote .names{margin-top:4px;color:var(--fg);font-size:12.5px;word-break:break-word}
+.warnline{margin-top:8px;color:#f0d68c;font-size:12.5px}
+
+/* --- 出席率：满员=绿，缺一个人就黄；缺席成员的名字一律红标 --- */
+.att{margin-top:8px;padding:7px 12px;border-radius:8px;border:1px solid #2c6b3f;
+  background:rgba(63,185,80,.08);color:#dff5e3;font-size:13px}
+.att.bad{border-color:var(--warn);background:rgba(210,153,34,.12);color:#f0d68c}
+.att.none{border-color:var(--line);background:var(--panel2);color:var(--dim)}
+.miss{color:#ff8a80;font-weight:600;word-break:break-word;font-size:12.5px;margin-top:4px}
+.badge.att{border-color:#2c6b3f;color:#7ee787;background:none;padding:1px 7px;margin:0}
+.badge.attbad{color:#f0d68c;border-color:#8a6520}
+.badge.defect{color:#ff8a80;border-color:#8a2f2f}
+.badge.issue{color:#98a2b3}
+
+/* --- 跟踪页签：跨会总清单 --- */
+.tsec{margin-top:16px}
+.trow{display:grid;grid-template-columns:96px 1fr 132px 72px 128px;gap:8px;
+  padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;
+  background:var(--panel);align-items:start;font-size:13px;word-break:break-word}
+.trow.head{background:var(--panel2);color:var(--dim);font-size:12px;font-weight:600;
+  position:sticky;top:0}
+.trow.late{border-color:#8a2f2f;background:rgba(248,81,73,.09)}
+.trow .who{color:#7ee787}
+.trow .due{color:var(--dim)}
+.trow.late .due{color:#ff8a80;font-weight:600}
+.trow .src{color:var(--accent);cursor:pointer;font-size:12px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sum .pill{background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:2px 12px;font-size:12.5px;color:var(--dim)}
+.sum .pill b{color:var(--fg)}
+.sum .pill.late b{color:#ff8a80}
+
+/* --- 会议模块：月历（仿日历 App：有会议的日子打点 + 场次角标）--- */
+.calbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.calbar .mon{font-size:clamp(14px,3.4vw,17px);font-weight:600;letter-spacing:.5px}
+.calbar button{min-width:44px;min-height:40px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.cal .wd{text-align:center;color:var(--dim);font-size:12px;padding:2px 0}
+.day{position:relative;min-height:62px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);padding:4px 6px;cursor:pointer}
+.day:hover{border-color:#3a4152}
+.day.pad{background:transparent;border-color:transparent;cursor:default}
+.day.has{border-color:#2f5f96}
+.day.on{border-color:var(--accent);background:var(--panel2)}
+.day .dn{font-size:13px;color:var(--fg)}
+.day.pad .dn{color:#3a4152}
+.day .mark{position:absolute;left:6px;bottom:8px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent)}
+.day .cnt{position:absolute;right:4px;bottom:4px;background:var(--accent);color:#fff;
+  border-radius:999px;font-size:11px;line-height:18px;height:18px;min-width:18px;
+  text-align:center;padding:0 5px;font-weight:600}
+.day.late .cnt{background:var(--err)}
+/* 手机上的月历替身：只列"当月有会议的日期"，一行一张卡，点得到 */
+.callist{display:none;flex-direction:column;gap:8px;margin-top:10px}
+.dcard{border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  padding:10px 12px;min-height:44px;cursor:pointer;display:flex;gap:10px;
+  align-items:center;flex-wrap:wrap}
+.dcard.on{border-color:var(--accent);background:var(--panel2)}
+.dcard .dd{font-size:15px;font-weight:600}
+.dayhead{margin:14px 0 6px;color:var(--accent);font-size:13px;font-weight:600;
+  border-bottom:1px solid var(--line);padding-bottom:4px}
+
+/* --- 共享内容模块 --- */
+.grp{border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  padding:10px 12px;margin-bottom:12px}
+.grp>.gh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;
+  font-weight:600;margin-bottom:6px}
+.grp>.gh .n{color:var(--dim);font-weight:400;font-size:12px}
+.sitem{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;
+  background:var(--panel2);padding:9px 11px;margin-bottom:8px;word-break:break-word}
+.sitem.expired{border-left-color:var(--err);background:rgba(248,81,73,.08)}
+.sitem.soon{border-left-color:var(--warn);background:rgba(210,153,34,.08)}
+.sitem.review{border-left-color:var(--warn)}
+.sitem.revoked{opacity:.55;border-left-color:var(--dim)}
+.sitem.locked{border-style:dashed;border-left-color:var(--warn)}
+.sitem .st{font-size:14px;color:#eef2f8;font-weight:600}
+.kvs{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);margin-top:6px}
+.kvs b{color:#cfd6e2;font-weight:600}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.badge.expired{color:#ff8a80;border-color:#8a2f2f}
+.badge.soon{color:#ffb86b;border-color:#8a6520}
+.badge.review{color:#ffb86b;border-color:#8a6520}
+.badge.revoked{color:#98a2b3}
+.badge.locked{color:#ffb86b;border-color:#8a6520}
+.badge.ttl{color:#79c0ff;border-color:#2f5f96}
+.hist{margin-top:6px;font-size:12.5px;color:var(--dim)}
+.hist .hrow{border-top:1px dashed var(--line);padding-top:4px;margin-top:4px;word-break:break-word}
+
+/* --- Agent 查询手册：长 curl 用可横滚的代码块，绝不撑破页面 --- */
+details.man{border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  padding:6px 12px;margin-top:14px}
+details.man>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;
+  gap:8px;font-size:13.5px;font-weight:600;color:var(--accent)}
+details.man .p{color:var(--dim);font-size:12.5px;margin:4px 0;word-break:break-word}
+.code{background:#0b0d12;border:1px solid var(--line);border-radius:6px;
+  padding:8px 10px;margin:6px 0;font-family:Consolas,"Courier New",monospace;
+  font-size:12.5px;white-space:pre;overflow-x:auto;max-width:100%;color:#cfe3ff}
+.ep{font-family:Consolas,"Courier New",monospace;color:var(--accent);
+  word-break:break-all;overflow-wrap:anywhere}
+.trunc{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;vertical-align:bottom}
+
+/* --- 响应式三档：≥1024 桌面多列 / 768~1023 平板 / <768 手机单列，另有 <480 微调 --- */
+@media (min-width:1024px){
+  .meetgrid{grid-template-columns:340px 1fr}
+}
+@media (max-width:1023px){
+  .meetgrid{grid-template-columns:1fr}
+  .mlist{max-height:none}
+  .trow{grid-template-columns:1fr 1fr}
+  .trow.head{display:none}
+  .day{min-height:54px}
+  .wrap{max-width:100%}
+}
+@media (max-width:767px){
+  /* 表格/多列行一律转卡片式单列；桌面专用列直接隐藏 */
+  .trow{grid-template-columns:1fr;padding:10px}
+  .d-none-mobile{display:none !important}
+  .cal{display:none}                     /* 7 列小方块在手机上看不清，换列表 */
+  .callist{display:flex}
+  .meetgrid{gap:10px}
+  button,select,input[type=text]{min-height:44px}   /* 触摸目标 */
+  .tabs{display:flex;width:100%}
+  .tabs button{flex:1 1 0;padding:8px 4px;min-height:44px}
+  .bar{padding:10px;gap:8px}
+  .bar .grow{min-width:0;flex:1 1 100%}
+  .count{margin-left:0}
+  .lights{margin-left:0}
+  .filters{gap:8px}
+  .vote .names{display:flex;flex-direction:column;gap:2px}
+  .sum{width:100%}
+  .time{margin-left:0}
+}
+@media (max-width:479px){
+  .wrap{padding:8px 8px 40px}
+  .chip,.badge,.ref{font-size:11px;padding:1px 5px}
+  .meta{gap:6px}
+  .tabs button{font-size:12.5px}
+  .grp,.sitem,.item,.turn,.mdetail{padding:8px 9px}
+  .code{font-size:11.5px}
+  .dcard .dd{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>团队黑板 · 共享内容看板</h1>
+    <span class="sub">只读视图</span>
+    <div class="lights">
+      <span class="light"><i class="dot" id="d-up"></i>上游 <b id="t-up">连接中</b></span>
+      <span class="light"><i class="dot" id="d-cnt"></i>条目 <b id="t-cnt">-</b></span>
+      <span class="light"><i class="dot" id="d-emb"></i>语义检索 <b id="t-emb">-</b></span>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+
+  <div class="tabs-row">
+    <span class="tabs" id="tabs">
+      <button data-mod="meet" class="on">会议</button>
+      <button data-mod="shared">共享内容</button>
+      <button data-mod="track">跟踪</button>
+    </span>
+    <button id="refresh">刷新</button>
+    <label class="chk"><input type="checkbox" id="auto"> 自动刷新<span id="tick"></span></label>
+    <button id="man-top">本页数据接口</button>
+  </div>
+
+  <div class="pane on" id="pane-meet">
+    <div class="tabs-row">
+      <span class="tabs sub" id="subtabs">
+        <button data-sub="cal" class="on">日历</button>
+        <button data-sub="board">完整留痕</button>
+      </span>
+      <span class="lb d-none-mobile">会议 = 谁在什么时候定了什么；「完整留痕」是这些会的原始发言流水</span>
+    </div>
+
+    <div class="pane on" id="sub-cal">
+      <div class="bar">
+        <div class="grow">
+          <input type="text" id="m-q" placeholder="按议题 / 目标 / 会议号搜索" autocomplete="off">
+          <button id="m-clear">清空</button>
+        </div>
+        <span class="lb">时间范围</span>
+        <select id="m-range">
+          <option value="">全部</option>
+          <option value="7">近 7 天</option>
+          <option value="30">近 30 天</option>
+          <option value="90">近 90 天</option>
+        </select>
+        <span class="lb">成员</span>
+        <select id="m-member"><option value="">全部</option></select>
+        <span class="lb">状态</span>
+        <select id="m-state">
+          <option value="">全部</option>
+          <option value="running">进行中</option>
+          <option value="converged">已收敛</option>
+          <option value="timeout">超时</option>
+          <option value="aborted">已中止</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="m-unconf"> 只看未当场确认</label>
+        <label class="chk"><input type="checkbox" id="m-risk"> 只看有遗留/有逾期</label>
+        <span class="count"><b id="m-count">0</b> 场会议</span>
+      </div>
+
+      <div class="calbar">
+        <button id="cal-prev">◀ 上月</button>
+        <span class="mon" id="cal-mon">—</span>
+        <button id="cal-next">下月 ▶</button>
+        <button id="cal-recent">回到最近有会议的月份</button>
+        <span class="lb d-none-mobile">点日期看当天会议 · 角标 = 当天场次</span>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="callist" id="cal-list"></div>
+
+      <div class="dayhead" id="m-dayhead">当天会议</div>
+      <div class="meetgrid">
+        <div class="mlist" id="m-list"></div>
+        <div class="mdetail" id="m-detail"></div>
+      </div>
+    </div>
+
+  <div class="pane" id="sub-board">
+    <div class="bar">
+      <div class="grow">
+        <input type="text" id="q" placeholder="搜索：用一句话描述你想找的内容（语义检索）" autocomplete="off">
+        <button class="primary" id="go">搜索</button>
+        <button id="clear">清空</button>
+      </div>
+      <span class="seg" id="modeseg">
+        <button data-mode="semantic" class="on" title="调用上游语义检索">语义</button>
+        <button data-mode="keyword" title="在已加载的条目里做本地包含匹配，不调用语义检索">关键词</button>
+      </span>
+    </div>
+
+    <div class="filters">
+      <span class="lb">作者</span><select id="f-author"><option value="">全部</option></select>
+      <span class="lb">主题</span><select id="f-topic"><option value="">全部</option></select>
+      <span class="lb">类型</span><select id="f-kind"><option value="">全部</option></select>
+      <span class="lb">条数</span><select id="f-limit">
+        <option value="10">10</option><option value="20" selected>20</option>
+        <option value="50">50</option></select>
+      <span class="count"><b id="count">0</b> 条<span id="scope"></span></span>
+    </div>
+
+    <div id="list"></div>
+  </div>
+  </div>
+
+  <div class="pane" id="pane-shared">
+    <div class="bar">
+      <div class="grow">
+        <input type="text" id="s-q" placeholder="搜索共享内容：标题 / 正文 / 标签" autocomplete="off">
+        <button class="primary" id="s-go">搜索</button>
+        <button id="s-clear">清空</button>
+      </div>
+      <label class="chk" title="走上游 /shared/search?semantic=1"><input type="checkbox" id="s-sem"> 语义检索</label>
+      <span class="lb">类型</span><select id="s-kind"><option value="">全部</option></select>
+      <span class="lb">维护责任人</span><select id="s-owner"><option value="">全部</option></select>
+      <span class="lb">标签</span><select id="s-tag"><option value="">全部</option></select>
+    </div>
+
+    <div class="tabs-row">
+      <span class="tabs sub" id="s-scope">
+        <button data-scope="task" class="on">任务级</button>
+        <button data-scope="permanent">永久</button>
+      </span>
+      <span class="lb d-none-mobile">任务级 = 跟着任务生灭，到点按销毁条件清掉；永久 = 长期档案，靠复审保鲜</span>
+      <span class="count"><b id="s-count">0</b> 条内容</span>
+    </div>
+
+    <div id="s-body"></div>
+  </div>
+
+  <div class="pane" id="pane-track">
+    <div class="bar">
+      <span class="sum">
+        <span class="pill">落实未闭环 <b id="k-aopen">-</b></span>
+        <span class="pill late">落实逾期 <b id="k-alate">-</b></span>
+        <span class="pill">遗留未闭环 <b id="k-iopen">-</b></span>
+        <span class="pill late">遗留逾期 <b id="k-ilate">-</b></span>
+        <span class="pill late">缺陷未闭环 <b id="k-dopen">-</b></span>
+        <span class="pill late">缺陷逾期 <b id="k-dlate">-</b></span>
+      </span>
+      <span class="lb">责任人</span>
+      <select id="k-owner"><option value="">全部</option></select>
+      <span class="lb">性质</span>
+      <select id="k-kind">
+        <option value="">全部</option>
+        <option value="defect">疑似缺陷 defect</option>
+        <option value="issue">普通遗留 issue</option>
+      </select>
+      <span class="lb">状态</span>
+      <select id="k-status">
+        <option value="">全部</option>
+        <option value="open">待办 open</option>
+        <option value="doing">进行中 doing</option>
+        <option value="watching">观察中 watching</option>
+        <option value="done">已完成 done</option>
+        <option value="closed">已关闭 closed</option>
+        <option value="dropped">已放弃 dropped</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="k-overdue"> 只看逾期</label>
+    </div>
+
+    <div class="tsec">
+      <div class="sect">落实事项（谁 · 做什么 · 什么时候之前做完）
+        <span class="n" id="k-acount">0 条</span></div>
+      <div id="k-actions"></div>
+    </div>
+
+    <div class="tsec">
+      <div class="sect">遗留问题 / 疑似缺陷（跟踪系统：没闭环的都在这儿）
+        <span class="n" id="k-icount">0 条</span></div>
+      <div id="k-issues"></div>
+    </div>
+  </div>
+
+  <details class="man" id="man">
+    <summary>Agent 查询手册 · 本页数据接口（只读，写请求一律 405）</summary>
+    <div id="man-body"></div>
+  </details>
+
+  <footer id="foot">—</footer>
+</div>
+
+<script>
+"use strict";
+var CFG = __CFG_JSON__;
+
+var state = {
+  raw: [],                 // 最近一次从服务端拿到的条目
+  mode: "semantic",
+  expanded: {},            // entry_id -> true，刷新后保持展开状态
+  facets: {author: {}, topic: {}, kind: {}},   // 选项从见过的数据里归纳，只增不减
+  timer: null, left: 0, busy: false,
+  mod: "meet",             // 一级模块：meet / shared / track，自动刷新时保持不变
+  sub: "cal",              // 会议模块内的二级页：cal（日历）/ board（完整留痕）
+  month: null,             // 月历当前显示的月份 {y, m}（m 是 0..11）
+  day: null,               // 选中的日期 "YYYY-MM-DD"（北京时间口径）
+  sessions: [], sid: null, detail: null,
+  shared: null,            // 共享内容：整份上游响应
+  sscope: "task",          // 共享内容分区：task / permanent
+  sopen: {},               // shared_id -> true，展开正文
+  shist: {},               // shared_id -> true，展开变更历史
+  sfacets: {kind: {}, owner: {}, tag: {}},
+  topen: {},               // turn_id -> true，刷新后保持展开的发言
+  highlight: null,         // 从会议跳过来要高亮的 entry_id（只亮一次）
+  track: null,             // 跟踪页签的数据：{actions, issues, counts, degraded}
+  owners: {}               // 见过的责任人，用来填筛选下拉；只增不减
+};
+
+// 服务端给的是英文枚举，页面上一律显示中文
+var STATE_CN = {running: "进行中", converged: "已收敛", timeout: "超时", aborted: "已中止"};
+var STATUS_CN = {ok: "已发言", absent: "缺席", error: "异常", skipped: "跳过"};
+var STANCE_CN = {support: "支持", oppose: "反对", neutral: "中立", need_info: "要资料"};
+var VOTE_CN = {"continue": "再谈一轮", "converge": "可收敛"};
+var STATE_KINDS = ["running", "converged", "timeout", "aborted"];
+var STATUS_KINDS = ["ok", "absent", "error", "skipped"];
+
+// 会议四要素用到的枚举（同样是"英文进来、中文出去"）
+var AGENDA_CN = {pending: "待议", concluded: "已结论", deferred: "顺延"};
+var AGENDA_KINDS = ["pending", "concluded", "deferred"];
+var VERDICT_CN = {agree: "同意", object: "反对", abstain: "弃权", absent: "缺席"};
+var VERDICT_KINDS = ["agree", "object", "abstain", "absent"];
+var TRACK_CN = {open: "待办", doing: "进行中", done: "已完成", dropped: "已放弃",
+                watching: "观察中", closed: "已关闭"};
+var TRACK_KINDS = ["open", "doing", "done", "dropped", "watching", "closed"];
+// 遗留问题的性质：defect = 缺席自动开的疑似缺陷单，必须一眼认出来
+var ISSUE_KIND_CN = {issue: "普通遗留", defect: "疑似缺陷"};
+var ISSUE_KINDS = ["issue", "defect"];
+// 上游 degraded[] 里的技术名 -> 人话（缺表/缺列时告诉用户缺的是哪一块）
+var DEGRADED_CN = {session_goal: "目标/议程/确认摘要", agenda_items: "议程条目",
+                   confirmations: "当场确认", actions: "落实事项", issues: "遗留问题",
+                   session_attendance: "出席率（应到/实到/缺席）",
+                   issue_kind: "遗留问题的性质与证据（issue/defect）"};
+
+// 共享内容：永久区按 kind 分组，英文枚举照例翻成中文（不认识的原样显示）
+var SHARED_KIND_CN = {node: "节点", agent: "Agent", owner_profile: "主人画像",
+                      owner_key_info: "主人关键信息", config: "配置", other: "其它"};
+var SHARED_KIND_ORDER = ["node", "agent", "owner_profile", "owner_key_info", "config", "other"];
+var TASK_STATE_CN = {active: "进行中", running: "进行中", done: "已结束",
+                     closed: "已结束", aborted: "已中止", destroyed: "已销毁"};
+var WEEKDAY_CN = ["日", "一", "二", "三", "四", "五", "六"];
+
+function degradedText(list){
+  if (!list || !list.length) return "";
+  var names = [];
+  for (var i = 0; i < list.length; i++) names.push(DEGRADED_CN[list[i]] || list[i]);
+  return "库里还没有这几块的记录表：" + names.join("、") + "（等建表迁移跑完就有了）";
+}
+
+function $(id){ return document.getElementById(id); }
+
+function el(tag, cls, text){
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  // 一律 textContent：条目正文是各 Agent 写的，永远不进 innerHTML
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  return n;
+}
+
+function banner(msg){
+  var b = $("banner");
+  if (msg) { b.textContent = msg; b.className = "on"; }
+  else { b.textContent = ""; b.className = ""; }
+}
+
+function pad(n){ return n < 10 ? "0" + n : "" + n; }
+
+// 时间一律显示北京时间（UTC+8）：不看浏览器本地时区的脸色，
+// 大家截图对时间时说的是同一个数。页脚会写明时区。
+function fmtTime(ts){
+  if (!ts) return "-";
+  var d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  var b = new Date(d.getTime() + 8 * 3600 * 1000);
+  return b.getUTCFullYear() + "-" + pad(b.getUTCMonth()+1) + "-" + pad(b.getUTCDate()) + " " +
+         pad(b.getUTCHours()) + ":" + pad(b.getUTCMinutes()) + ":" + pad(b.getUTCSeconds());
+}
+
+// 日历一律按北京时间切日：先把时刻整体 +8h，再全程用 UTC 取值
+function bj(ts){
+  if (!ts) return null;
+  var d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
+  return new Date(d.getTime() + 8 * 3600 * 1000);
+}
+
+function dayKey(ts){
+  var b = bj(ts);
+  if (!b) return "";
+  return b.getUTCFullYear() + "-" + pad(b.getUTCMonth() + 1) + "-" + pad(b.getUTCDate());
+}
+
+function hhmm(ts){
+  var b = bj(ts);
+  if (!b) return "--:--";
+  return pad(b.getUTCHours()) + ":" + pad(b.getUTCMinutes());
+}
+
+function keyOf(y, m, d){ return y + "-" + pad(m + 1) + "-" + pad(d); }
+
+function dayLabel(key){
+  var parts = String(key || "").split("-");
+  if (parts.length !== 3) return key || "-";
+  var dt = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+  return Number(parts[1]) + " 月 " + Number(parts[2]) + " 日（周" +
+         WEEKDAY_CN[dt.getUTCDay()] + "）";
+}
+
+// 截止时间只到分钟，表格里省一列宽度
+function fmtDue(ts){
+  if (!ts) return "未定截止";
+  var text = fmtTime(ts);
+  return text.length > 16 ? text.slice(0, 16) : text;
+}
+
+function relTime(ts){
+  var d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  var s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 0) return "";
+  if (s < 60) return s + " 秒前";
+  if (s < 3600) return Math.floor(s/60) + " 分钟前";
+  if (s < 86400) return Math.floor(s/3600) + " 小时前";
+  return Math.floor(s/86400) + " 天前";
+}
+
+function api(path){
+  return fetch(path, {headers: {"Accept": "application/json"}}).then(function(r){
+    return r.json().catch(function(){ return {ok:false, error:"bad_json"}; })
+            .then(function(j){ return {status: r.status, body: j}; });
+  });
+}
+
+// --- 状态灯 ---------------------------------------------------------
+function loadHealth(){
+  return api("/api/health").then(function(res){
+    var b = res.body || {};
+    if (res.status !== 200 || !b.ok){
+      $("d-up").className = "dot bad"; $("t-up").textContent = "不可用";
+      $("d-cnt").className = "dot"; $("t-cnt").textContent = "-";
+      $("d-emb").className = "dot"; $("t-emb").textContent = "-";
+      banner("上游黑板不可用：" + (b.detail || b.error || ("HTTP " + res.status)));
+      return;
+    }
+    banner("");
+    $("d-up").className = "dot ok";
+    $("t-up").textContent = (b.node || "ok") + " v" + (b.version || "?");
+    var total = (b.entries && b.entries.total !== undefined) ? b.entries.total : "-";
+    $("d-cnt").className = "dot ok"; $("t-cnt").textContent = total;
+    var emb = b.embed || {};
+    if (emb.available && emb.loaded !== false){
+      $("d-emb").className = "dot ok";
+      $("t-emb").textContent = "可用 · " + (emb.model || "?");
+    } else if (emb.available){
+      $("d-emb").className = "dot warn"; $("t-emb").textContent = "未加载";
+    } else {
+      $("d-emb").className = "dot warn"; $("t-emb").textContent = "退化为关键词";
+    }
+  }).catch(function(e){
+    $("d-up").className = "dot bad"; $("t-up").textContent = "不可用";
+    banner("看板服务本身连不上：" + e);
+  });
+}
+
+// --- 拉数据 ---------------------------------------------------------
+function load(){
+  if (state.busy) return Promise.resolve();
+  state.busy = true;
+  var q = $("q").value.trim();
+  var limit = $("f-limit").value;
+  var url;
+  // 语义模式且有 q 才去打 /api/search；空 q 一律走 /api/entries
+  if (q && state.mode === "semantic"){
+    url = "/api/search?q=" + encodeURIComponent(q) + "&limit=" + encodeURIComponent(limit);
+  } else {
+    url = "/api/entries?limit=" + encodeURIComponent(limit);
+    var a = $("f-author").value, t = $("f-topic").value, k = $("f-kind").value;
+    if (a) url += "&author=" + encodeURIComponent(a);
+    if (t) url += "&topic=" + encodeURIComponent(t);
+    if (k) url += "&kind=" + encodeURIComponent(k);
+  }
+  return api(url).then(function(res){
+    var b = res.body || {};
+    if (res.status !== 200 || !b.ok){
+      banner("取条目失败：" + (b.detail || b.error || ("HTTP " + res.status)));
+      state.raw = [];
+    } else {
+      banner("");
+      state.raw = b.entries || [];
+      collectFacets(state.raw);
+    }
+    render();
+  }).catch(function(e){
+    banner("请求失败：" + e); state.raw = []; render();
+  }).then(function(){ state.busy = false; });
+}
+
+function collectFacets(rows){
+  var keys = ["author", "topic", "kind"];
+  for (var i = 0; i < rows.length; i++){
+    for (var j = 0; j < keys.length; j++){
+      var v = rows[i][keys[j]];
+      if (v) state.facets[keys[j]][v] = true;
+    }
+  }
+  for (var j2 = 0; j2 < keys.length; j2++) syncSelect("f-" + keys[j2], state.facets[keys[j2]]);
+}
+
+function syncSelect(id, set){
+  var sel = $(id), keep = sel.value;
+  var names = Object.keys(set).sort();
+  if (sel.options.length - 1 === names.length) return;   // 没有新选项就别动
+  sel.innerHTML = "";
+  sel.appendChild(el("option", null, "全部"));
+  sel.options[0].value = "";
+  for (var i = 0; i < names.length; i++){
+    var o = el("option", null, names[i]);
+    o.value = names[i];
+    sel.appendChild(o);
+  }
+  sel.value = keep;
+}
+
+// --- 渲染 -----------------------------------------------------------
+function visible(){
+  var a = $("f-author").value, t = $("f-topic").value, k = $("f-kind").value;
+  var q = $("q").value.trim().toLowerCase();
+  var kw = (state.mode === "keyword") && q;
+  return state.raw.filter(function(e){
+    if (a && e.author !== a) return false;
+    if (t && e.topic !== t) return false;
+    if (k && e.kind !== k) return false;
+    if (kw){
+      var hay = [e.content, e.author, e.topic, e.kind].join(" ").toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function card(e){
+  var box = el("div", "card");
+  var open = !!state.expanded[e.entry_id];
+  if (open) box.className = "card open";
+
+  var meta = el("div", "meta");
+  meta.appendChild(el("span", "id", "#" + (e.entry_id !== undefined ? e.entry_id : "?")));
+  if (e.author) meta.appendChild(el("span", "chip author", e.author));
+  if (e.topic)  meta.appendChild(el("span", "chip topic", e.topic));
+  if (e.kind)   meta.appendChild(el("span", "chip kind", e.kind));
+  if (e.status && e.status !== "active") meta.appendChild(el("span", "chip", e.status));
+  if (typeof e.score === "number") meta.appendChild(el("span", "chip score", "相似度 " + e.score.toFixed(3)));
+  var t = el("span", "time", fmtTime(e.ts));
+  var rel = relTime(e.ts);
+  if (rel) t.textContent += "（" + rel + "）";
+  meta.appendChild(t);
+  box.appendChild(meta);
+
+  var body = el("div", "content", e.content === undefined ? "" : e.content);
+  if (!open) body.className = "content clip";
+  box.appendChild(body);
+
+  var text = String(e.content || "");
+  if (text.length > 160 || text.indexOf("\\n") >= 0){
+    box.appendChild(el("div", "more", open ? "收起 ▲" : "展开全文 ▼"));
+  } else if (!open){
+    body.className = "content";        // 短正文不折叠
+  }
+
+  if (e.refs && e.refs.length) box.appendChild(refsRow(e.refs));
+
+  box.onclick = function(){
+    if (state.expanded[e.entry_id]) delete state.expanded[e.entry_id];
+    else state.expanded[e.entry_id] = true;
+    render();
+  };
+  return box;
+}
+
+// refs 同样是各 Agent 写的不可信内容：JSON.stringify 之后仍旧走 textContent
+function refsRow(refs){
+  var row = el("div", "refs");
+  for (var i = 0; i < refs.length; i++){
+    var r = refs[i];
+    row.appendChild(el("span", "ref", "ref " + (typeof r === "object" ? JSON.stringify(r) : r)));
+  }
+  return row;
+}
+
+function stamp(){
+  $("foot").textContent = "最后更新 " + fmtTime(new Date().toISOString()) +
+    "　·　页面所有时间均为北京时间（UTC+8）" +
+    "　·　本页只读，不向黑板写入任何内容";
+}
+
+function render(){
+  var rows = visible();
+  var hl = state.highlight;
+  state.highlight = null;                      // 高亮只亮这一次
+  var list = $("list");
+  list.innerHTML = "";
+  $("count").textContent = rows.length;
+  var q = $("q").value.trim();
+  $("scope").textContent = q
+    ? ("　" + (state.mode === "semantic" ? "语义检索" : "关键词匹配") + "：" + q)
+    : "　最新条目";
+  if (!rows.length){
+    var hint = state.raw.length
+      ? "当前筛选条件下没有条目 —— 试试把作者/主题/类型改回「全部」。"
+      : "没有取到任何条目 —— 上游可能为空，或连接异常（见顶部提示）。";
+    list.appendChild(el("div", "empty", hint));
+  } else {
+    var seen = false;
+    for (var i = 0; i < rows.length; i++){
+      var box = card(rows[i]);
+      if (hl !== null && rows[i].entry_id === hl){
+        box.className = box.className + " hit";
+        seen = true;
+      }
+      list.appendChild(box);
+    }
+    if (hl !== null && !seen){
+      banner("条目 #" + hl + " 不在当前列表里 —— 把「条数」调大或清掉筛选再找。");
+    }
+  }
+  stamp();
+}
+
+// --- 会议：场次列表 -------------------------------------------------
+function badge(kind, allowed, text){
+  // class 名只从白名单里取，绝不把服务端字符串直接当样式类
+  var cls = "badge";
+  for (var i = 0; i < allowed.length; i++) if (allowed[i] === kind) cls = "badge " + kind;
+  return el("span", cls, text);
+}
+
+// --- 出席率：分母是**应到人数**（members 全集），不是在场人数 ----------
+// 成员都是云主机 / 常驻 Agent，设计上不该掉线 —— 所以满员才算正常（绿），
+// 只要缺一个就是异常（黄），缺席成员的名字一律红标。
+function attInfo(s){
+  var exp = s.expected_count, pre = s.present_count;
+  var miss = s.absent_members || [];
+  if (exp === null || exp === undefined || pre === null || pre === undefined){
+    return {known: false, expected: (s.members || []).length, present: null,
+            absent: null, rate: null, missing: miss, text: "出席率（未记录）"};
+  }
+  var rate = s.attendance_rate;
+  if (rate === null || rate === undefined) rate = exp ? (pre / exp) : null;
+  var text = "出席率 " + pre + "/" + exp +
+             (rate === null ? "" : (" = " + (rate * 100).toFixed(1) + "%"));
+  return {known: true, expected: exp, present: pre,
+          absent: (s.absent_count === undefined ? null : s.absent_count),
+          rate: rate, missing: miss, text: text};
+}
+
+function attFull(a){ return a.known && a.rate !== null && a.rate >= 1; }
+
+function attBadge(s){
+  var a = attInfo(s);
+  if (!a.known) return badge("", [], a.text);
+  return badge(attFull(a) ? "att" : "attbad", ["att", "attbad"], a.text);
+}
+
+// 缺席名单：红标，且明说"已自动开缺陷单"，别让人以为只是个统计数字
+function attBlock(s){
+  var a = attInfo(s);
+  var box = el("div", !a.known ? "att none" : (attFull(a) ? "att" : "att bad"));
+  box.appendChild(el("div", null, a.known
+    ? ("应到 " + a.expected + " 人 / 实到 " + a.present + " 人 / 缺席 " +
+       (a.absent === null ? (a.expected - a.present) : a.absent) + " 人 —— " + a.text)
+    : "出席率：（未记录 —— 这场会是老版本跑的）"));
+  if (a.missing.length){
+    box.appendChild(el("div", "miss",
+      "缺席：" + a.missing.join("、") + "（点名无应答 = 疑似程序缺陷，已自动开单跟踪）"));
+  } else if (a.known && attFull(a)){
+    box.appendChild(el("div", null, "全员到齐"));
+  }
+  return box;
+}
+
+// 缺陷单的证据是 jsonb 数组（键名是中文），这里压成一行给人看
+function evidenceText(list){
+  if (!list || !list.length) return "";
+  var parts = [];
+  for (var i = 0; i < list.length && i < 3; i++){
+    var e = list[i] || {}, bits = [];
+    if (e["点名次数"] !== undefined && e["点名次数"] !== null){
+      bits.push("点名 " + e["点名次数"] + " 次无应答");
+    }
+    if (e["失败原因"]) bits.push(String(e["失败原因"]));
+    if (e["环节"] && e["环节"].length) bits.push(String(e["环节"].join("、")));
+    if (e.session_id) bits.push("来源 " + e.session_id);
+    if (e.ts) bits.push(fmtTime(e.ts));
+    parts.push(bits.length ? bits.join("｜") : JSON.stringify(e));
+  }
+  return parts.join("；");
+}
+
+// --- 三个模块：会议（日历）/ 共享内容 / 跟踪 --------------------------
+// 信息边界：会议 = 一场会本身（目标/议程/结论/确认/落实/遗留/留痕）；
+// 共享内容 = 与会议无关、供人和 Agent 长期或按任务取用的资料；
+// 跟踪 = 跨会汇总的未闭环清单。三者受众与管控不同，页面上不混。
+function paintMod(){
+  var btns = $("tabs").getElementsByTagName("button");
+  for (var i = 0; i < btns.length; i++){
+    btns[i].className = (btns[i].getAttribute("data-mod") === state.mod) ? "on" : "";
+  }
+  $("pane-meet").className = (state.mod === "meet") ? "pane on" : "pane";
+  $("pane-shared").className = (state.mod === "shared") ? "pane on" : "pane";
+  $("pane-track").className = (state.mod === "track") ? "pane on" : "pane";
+}
+
+function paintSub(){
+  var btns = $("subtabs").getElementsByTagName("button");
+  for (var i = 0; i < btns.length; i++){
+    btns[i].className = (btns[i].getAttribute("data-sub") === state.sub) ? "on" : "";
+  }
+  $("sub-cal").className = (state.sub === "cal") ? "pane on" : "pane";
+  $("sub-board").className = (state.sub === "board") ? "pane on" : "pane";
+}
+
+function switchMod(name){
+  state.mod = name;
+  paintMod();
+  reloadCurrent();
+}
+
+function switchSub(name){
+  state.sub = name;
+  paintSub();
+  reloadCurrent();
+}
+
+function loadSessions(){
+  var url = "/api/sessions?limit=50";
+  var st = $("m-state").value;
+  if (st) url += "&state=" + encodeURIComponent(st);
+  return api(url).then(function(res){
+    var b = res.body || {};
+    if (res.status !== 200 || !b.ok){
+      banner("取会议列表失败：" + (b.detail || b.error || ("HTTP " + res.status)));
+      state.sessions = [];
+    } else {
+      banner("");
+      state.sessions = b.sessions || [];
+      collectMembers(state.sessions);
+    }
+    renderSessions();
+  }).catch(function(e){
+    banner("请求失败：" + e); state.sessions = []; renderSessions();
+  });
+}
+
+function loadDetail(sid){
+  if (!sid) return Promise.resolve();
+  return api("/api/sessions/" + encodeURIComponent(sid)).then(function(res){
+    var b = res.body || {};
+    if (res.status === 404){
+      state.detail = {gone: true};
+    } else if (res.status !== 200 || !b.ok){
+      banner("取会议详情失败：" + (b.detail || b.error || ("HTTP " + res.status)));
+      state.detail = null;
+    } else {
+      state.detail = b;
+    }
+    renderDetail();
+  }).catch(function(e){
+    banner("请求失败：" + e); state.detail = null; renderDetail();
+  });
+}
+
+// 顶栏筛选：时间范围 / 只看未当场确认 / 只看有遗留或逾期 / 按成员
+// "有遗留或逾期"要靠跟踪清单来判断（会议列表本身不带这些），所以会议模块也拉一份 /tracking。
+function riskMap(){
+  var map = {}, d = state.track || {};
+  var bump = function(rows, isIssue){
+    for (var i = 0; i < rows.length; i++){
+      var r = rows[i], sid = r.session_id;
+      if (!sid) continue;
+      if (r.status === "done" || r.status === "closed" || r.status === "dropped") continue;
+      if (!map[sid]) map[sid] = {issues: 0, overdue: 0};
+      if (isIssue) map[sid].issues += 1;
+      if (r.overdue) map[sid].overdue += 1;
+    }
+  };
+  bump(d.actions || [], false);
+  bump(d.issues || [], true);
+  return map;
+}
+
+// 只有 confirm_summary.passed === true 才算"当场确认过"，其余一律算没确认
+function sessionPassed(s){
+  return !!(s.confirm_summary && s.confirm_summary.passed === true);
+}
+
+function visibleSessions(){
+  var q = $("m-q").value.trim().toLowerCase();
+  var range = Number($("m-range").value || 0);
+  var member = $("m-member").value;
+  var unconf = $("m-unconf").checked;
+  var risky = $("m-risk").checked;
+  var risks = riskMap();
+  var floor = range ? (Date.now() - range * 86400000) : null;
+  return state.sessions.filter(function(s){
+    if (q){
+      var hay = [s.topic, s.question, s.goal, s.session_id].join(" ").toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    if (floor !== null){
+      var t = new Date(s.started_at).getTime();
+      if (isNaN(t) || t < floor) return false;
+    }
+    if (member){
+      var mem = (s.members || []).concat([s.moderator || ""]);
+      if (mem.indexOf(member) < 0) return false;
+    }
+    if (unconf && sessionPassed(s)) return false;
+    if (risky){
+      var r = risks[s.session_id];
+      if (!r || (r.issues <= 0 && r.overdue <= 0)) return false;
+    }
+    return true;
+  });
+}
+
+function collectMembers(rows){
+  if (!state.mems) state.mems = {};
+  for (var i = 0; i < rows.length; i++){
+    var mem = (rows[i].members || []).concat([rows[i].moderator || ""]);
+    for (var j = 0; j < mem.length; j++) if (mem[j]) state.mems[mem[j]] = true;
+  }
+  syncSelect("m-member", state.mems);
+}
+
+// --- 会议：月历（一格一天，有会议就打点 + 场次角标）---------------------
+function byDay(rows){
+  var map = {}, k;
+  for (var i = 0; i < rows.length; i++){
+    var key = dayKey(rows[i].started_at);
+    if (!key) continue;
+    if (!map[key]) map[key] = [];
+    map[key].push(rows[i]);
+  }
+  for (k in map) if (map.hasOwnProperty(k)){
+    map[k].sort(function(a, b){            // 同一天多场会按时间排
+      return String(a.started_at || "").localeCompare(String(b.started_at || ""));
+    });
+  }
+  return map;
+}
+
+function monthKey(){ return state.month.y + "-" + pad(state.month.m + 1); }
+
+function dayHasLate(rows, risks){
+  for (var i = 0; i < rows.length; i++){
+    var r = risks[rows[i].session_id];
+    if (r && r.overdue > 0) return true;
+  }
+  return false;
+}
+
+function selectDay(key){
+  state.day = key;
+  var rows = byDay(visibleSessions())[key] || [];
+  var found = false;
+  for (var i = 0; i < rows.length; i++){
+    if (rows[i].session_id === state.sid) found = true;
+  }
+  if (rows.length && !found){
+    state.sid = rows[0].session_id;       // 当天第一场先摆出来，手机上少点一次
+    state.detail = null;
+    state.topen = {};
+    loadDetail(state.sid);
+  }
+  renderSessions();
+  renderDetail();
+}
+
+function renderCalendar(){
+  var rows = visibleSessions();
+  var map = byDay(rows);
+  var keys = Object.keys(map).sort();
+  var risks = riskMap();
+  $("m-count").textContent = rows.length;
+
+  if (!state.month){                       // 默认定位到最近有会议的月份
+    var anchor = keys.length ? keys[keys.length - 1] : dayKey(new Date().toISOString());
+    state.month = {y: Number(anchor.slice(0, 4)), m: Number(anchor.slice(5, 7)) - 1};
+  }
+  if (state.day && !map[state.day]) state.day = null;
+  if (!state.day){
+    var inMonth = [];
+    for (var i = 0; i < keys.length; i++){
+      if (keys[i].slice(0, 7) === monthKey()) inMonth.push(keys[i]);
+    }
+    if (inMonth.length) state.day = inMonth[inMonth.length - 1];
+  }
+  // 首次进来就把当天第一场摊开，别让详情面板空着等人点
+  if (state.day && !state.sid){
+    var todays = map[state.day] || [];
+    if (todays.length){
+      state.sid = todays[0].session_id;
+      loadDetail(state.sid);
+    }
+  }
+
+  $("cal-mon").textContent = state.month.y + " 年 " + (state.month.m + 1) + " 月";
+
+  var cal = $("cal");
+  cal.innerHTML = "";
+  for (var w = 0; w < 7; w++) cal.appendChild(el("div", "wd", WEEKDAY_CN[w]));
+  var lead = new Date(Date.UTC(state.month.y, state.month.m, 1)).getUTCDay();
+  var total = new Date(Date.UTC(state.month.y, state.month.m + 1, 0)).getUTCDate();
+  for (var p = 0; p < lead; p++) cal.appendChild(el("div", "day pad"));
+  for (var d = 1; d <= total; d++){
+    var key = keyOf(state.month.y, state.month.m, d);
+    var list = map[key] || [];
+    var cls = "day";
+    if (list.length) cls += " has";
+    if (list.length && dayHasLate(list, risks)) cls += " late";
+    if (state.day === key) cls += " on";
+    var cell = el("div", cls);
+    cell.appendChild(el("div", "dn", d));
+    if (list.length){
+      cell.appendChild(el("div", "mark"));               // 标记点
+      cell.appendChild(el("div", "cnt", list.length));   // 角标 = 当天场次
+      cell.onclick = (function(k){ return function(){ selectDay(k); }; })(key);
+    }
+    cal.appendChild(cell);
+  }
+
+  // 手机上不挤 7 列小方块：只列"本月有会议的日期"，一天一张大卡片
+  var cl = $("cal-list");
+  cl.innerHTML = "";
+  var mine = [];
+  for (var j = 0; j < keys.length; j++){
+    if (keys[j].slice(0, 7) === monthKey()) mine.push(keys[j]);
+  }
+  if (!mine.length){
+    cl.appendChild(el("div", "empty", "本月没有会议 —— 左右切换月份，或点「回到最近有会议的月份」。"));
+  } else {
+    for (var n = 0; n < mine.length; n++){
+      var k2 = mine[n], day = map[k2];
+      var card2 = el("div", state.day === k2 ? "dcard on" : "dcard");
+      card2.appendChild(el("span", "dd", dayLabel(k2)));
+      card2.appendChild(el("span", "chip", day.length + " 场"));
+      card2.appendChild(el("span", "chip topic", hhmm(day[0].started_at) + " 起"));
+      if (dayHasLate(day, risks)) card2.appendChild(badge("late", ["late"], "有逾期"));
+      card2.onclick = (function(k3){ return function(){ selectDay(k3); }; })(k2);
+      cl.appendChild(card2);
+    }
+  }
+}
+
+function shiftMonth(delta){
+  if (!state.month) return;
+  var m = state.month.m + delta, y = state.month.y;
+  while (m < 0){ m += 12; y -= 1; }
+  while (m > 11){ m -= 12; y += 1; }
+  state.month = {y: y, m: m};
+  state.day = null;
+  renderSessions();
+}
+
+function jumpRecentMonth(){
+  var keys = Object.keys(byDay(visibleSessions())).sort();
+  if (!keys.length) return;
+  var last = keys[keys.length - 1];
+  state.month = {y: Number(last.slice(0, 4)), m: Number(last.slice(5, 7)) - 1};
+  state.day = last;
+  renderSessions();
+}
+
+function sessionCard(s){
+  var box = el("div", state.sid === s.session_id ? "scard on" : "scard");
+  var head = el("div", "meta");
+  head.appendChild(el("span", "id", hhmm(s.started_at)));
+  head.appendChild(el("span", "chip topic", s.topic || "-"));
+  head.appendChild(badge(s.state, STATE_KINDS, STATE_CN[s.state] || s.state || "?"));
+  head.appendChild(el("span", "chip", "第 " + (s.round_no || 0) + "/" + (s.max_rounds || 0) + " 轮"));
+  if (!sessionPassed(s)) head.appendChild(badge("attbad", ["attbad"], "未当场确认"));
+  box.appendChild(head);
+  box.appendChild(el("div", "q", s.goal ? ("目标：" + s.goal) : (s.question || "（无问题描述）")));
+  var foot = el("div", "meta");
+  foot.appendChild(el("span", null, fmtTime(s.started_at)));
+  var a = attInfo(s);
+  foot.appendChild(el("span", "chip", "应到 " + a.expected + " 人"));
+  if (a.known) foot.appendChild(el("span", "chip", "实到 " + a.present + " 人"));
+  foot.appendChild(attBadge(s));
+  foot.appendChild(el("span", "chip", (s.turns_total || 0) + " 条发言"));
+  if (s.conclusion_entry) foot.appendChild(badge("converged", STATE_KINDS, "有结论"));
+  box.appendChild(foot);
+  // 缺席名单直接摆在卡片上：谁没来是最该被看见的那件事
+  if (a.missing.length) box.appendChild(el("div", "miss", "缺席：" + a.missing.join("、")));
+  box.onclick = function(){
+    state.sid = s.session_id;
+    state.detail = null;
+    state.topen = {};
+    renderSessions(); renderDetail(); loadDetail(s.session_id);
+  };
+  return box;
+}
+
+// 当天会议列表：点月历里的某一天 → 这儿列出那天的每一场（多场按时间排）
+function renderDayList(){
+  var map = byDay(visibleSessions());
+  var rows = state.day ? (map[state.day] || []) : [];
+  var list = $("m-list");
+  list.innerHTML = "";
+  $("m-dayhead").textContent = state.day
+    ? (dayLabel(state.day) + " · 共 " + rows.length + " 场")
+    : "当天会议（先在上面挑一天）";
+  if (!rows.length){
+    list.appendChild(el("div", "empty", state.sessions.length
+      ? "这一天没有会议 —— 换个日期，或把上面的筛选放宽。"
+      : "暂无会议记录"));
+  } else {
+    for (var i = 0; i < rows.length; i++) list.appendChild(sessionCard(rows[i]));
+  }
+}
+
+function renderSessions(){
+  renderCalendar();
+  renderDayList();
+  stamp();
+}
+
+// --- 会议：逐条发言 -------------------------------------------------
+function jumpToEntry(entryId){
+  state.expanded[entryId] = true;
+  state.highlight = entryId;
+  $("q").value = "";
+  state.sub = "board";                 // 黑板流水现在是会议模块里的「完整留痕」
+  paintSub();
+  switchMod("meet");
+}
+
+// 从跟踪模块点"来源会议"跳回会议模块，并自动展开那一场（连带定位到那一天）
+function jumpToSession(sid){
+  state.sid = sid;
+  state.detail = null;
+  state.topen = {};
+  for (var i = 0; i < state.sessions.length; i++){
+    if (state.sessions[i].session_id === sid){
+      var key = dayKey(state.sessions[i].started_at);
+      if (key){
+        state.day = key;
+        state.month = {y: Number(key.slice(0, 4)), m: Number(key.slice(5, 7)) - 1};
+      }
+      break;
+    }
+  }
+  state.sub = "cal";
+  paintSub();
+  switchMod("meet");
+}
+
+function turnCard(t){
+  var box = el("div", "turn");
+  var meta = el("div", "meta");
+  meta.appendChild(el("span", "chip author", t.speaker || "?"));
+  meta.appendChild(badge(t.status, STATUS_KINDS, STATUS_CN[t.status] || t.status || "?"));
+  if (t.stance) meta.appendChild(el("span", "chip kind", STANCE_CN[t.stance] || t.stance));
+  if (t.vote) meta.appendChild(el("span", "chip", VOTE_CN[t.vote] || t.vote));
+  if (typeof t.confidence === "number"){
+    meta.appendChild(el("span", "chip score", "置信 " + t.confidence.toFixed(2)));
+  }
+  meta.appendChild(el("span", "time", fmtTime(t.ts)));
+  box.appendChild(meta);
+
+  var text = (t.content === null || t.content === undefined) ? "" : String(t.content);
+  if (text){
+    var open = !!state.topen[t.turn_id];
+    var body = el("div", open ? "content" : "content clip", text);
+    box.appendChild(body);
+    if (text.length > 160 || text.indexOf("\\n") >= 0){
+      var more = el("div", "more", open ? "收起 ▲" : "展开全文 ▼");
+      more.onclick = function(){
+        if (state.topen[t.turn_id]) delete state.topen[t.turn_id];
+        else state.topen[t.turn_id] = true;
+        renderDetail();
+      };
+      box.appendChild(more);
+    } else if (!open){
+      body.className = "content";
+    }
+  } else if (t.status === "absent" || t.status === "error"){
+    // 没有正文的位置就显示原因，别留一个空壳
+    box.appendChild(el("div", "why", "原因：" + (t.error || "未记录原因")));
+  }
+  if (text && t.error) box.appendChild(el("div", "why", "备注：" + t.error));
+
+  if (t.refs && t.refs.length) box.appendChild(refsRow(t.refs));
+  if (t.entry_id){
+    var row = el("div", "refs");
+    var link = el("span", "linkid", "黑板 #" + t.entry_id);
+    link.onclick = (function(id){ return function(){ jumpToEntry(id); }; })(t.entry_id);
+    row.appendChild(link);
+    box.appendChild(row);
+  }
+  return box;
+}
+
+// --- 会议四要素：目标 / 议程 / 当场确认 / 落实·遗留 -------------------
+function section(box, title, count){
+  var head = el("div", "sect", title);
+  head.appendChild(el("span", "n", count + " 条"));
+  box.appendChild(head);
+  return head;
+}
+
+function kv(parent, label, value){
+  var line = el("div", "k");
+  line.appendChild(el("b", null, label + "："));
+  line.appendChild(el("span", null, (value === null || value === undefined || value === "")
+    ? "（未记录）" : String(value)));
+  parent.appendChild(line);
+}
+
+// 议程：逐项 title / expected / 该项结论 / 状态徽标
+function renderAgenda(box, items, agenda){
+  section(box, "议程", items.length || (agenda || []).length);
+  if (items.length){
+    for (var i = 0; i < items.length; i++){
+      var it = items[i];
+      var row = el("div", "item");
+      var head = el("div", "meta");
+      head.appendChild(el("span", "id", "#" + (it.seq === undefined ? "?" : it.seq)));
+      head.appendChild(el("span", "chip topic", it.title || "（无题）"));
+      head.appendChild(badge(it.status, AGENDA_KINDS, AGENDA_CN[it.status] || it.status || "?"));
+      row.appendChild(head);
+      kv(row, "预期产出", it.expected);
+      kv(row, "该项结论", it.conclusion);
+      if (it.note) kv(row, "备注", it.note);
+      if (it.conclusion_entry){
+        var links = el("div", "refs");
+        var link = el("span", "linkid", "黑板 #" + it.conclusion_entry);
+        link.onclick = (function(id){ return function(){ jumpToEntry(id); }; })(it.conclusion_entry);
+        links.appendChild(link);
+        row.appendChild(links);
+      }
+      box.appendChild(row);
+    }
+    return;
+  }
+  // 没有结构化议程条目时，退而求其次显示会话上那份 agenda（纯文本数组）
+  var raw = agenda || [];
+  if (raw.length){
+    for (var j = 0; j < raw.length; j++){
+      var plain = el("div", "item");
+      plain.appendChild(el("div", "t", (j + 1) + ". " +
+        (typeof raw[j] === "object" ? JSON.stringify(raw[j]) : raw[j])));
+      box.appendChild(plain);
+    }
+  } else {
+    box.appendChild(el("div", "empty", "（未记录目标/议程）"));
+  }
+}
+
+// 总体结论 + 当场确认：passed 与否必须一眼看得见，不许把"没确认"显示成"通过"
+function renderConfirm(box, s, confirms){
+  section(box, "总体结论与当场确认", confirms.length);
+  if (s.conclusion_text){
+    box.appendChild(el("div", "concl", "结论：" + s.conclusion_text));
+  } else {
+    box.appendChild(el("div", "concl none", "尚未产出结论"));
+  }
+
+  var sm = s.confirm_summary;
+  var counts = {agree: [], object: [], abstain: [], absent: []};
+  var k;
+  if (sm){
+    for (k in counts) if (counts.hasOwnProperty(k)) counts[k] = sm[k] || [];
+  } else {
+    // 没有汇总就按逐条确认自己数（只数总体口径 target=overall 的）
+    for (var i = 0; i < confirms.length; i++){
+      var c = confirms[i];
+      if (c.target && c.target !== "overall") continue;
+      if (counts.hasOwnProperty(c.verdict)) counts[c.verdict].push(c.member);
+    }
+  }
+  var passed = sm ? sm.passed : null;
+  var line = el("div", passed === true ? "vote pass" : "vote fail");
+  var required = sm && (sm.required !== null && sm.required !== undefined) ? sm.required : null;
+  var head = passed === true
+    ? "已当场确认通过"
+    : (passed === false ? "未通过（当场确认没过）" : "未确认（没有当场确认记录）");
+  if (required !== null) head += "　需 " + required + " 票，同意 " + counts.agree.length + " 票";
+  else head += "　同意 " + counts.agree.length + " 票";
+  line.appendChild(el("div", null, head));
+  line.appendChild(el("div", null, "确认时间：" +
+    (s.confirmed_at ? fmtTime(s.confirmed_at) : "（未确认）")));
+  var order = VERDICT_KINDS;
+  for (var v = 0; v < order.length; v++){
+    var names = counts[order[v]] || [];
+    var row = el("div", "names");
+    row.appendChild(el("span", null, VERDICT_CN[order[v]] + "（" + names.length + "）："));
+    row.appendChild(el("span", null, names.length ? names.join("、") : "无"));
+    line.appendChild(row);
+  }
+  box.appendChild(line);
+
+  if (confirms.length){
+    for (var m = 0; m < confirms.length; m++){
+      var cc = confirms[m];
+      var item = el("div", "item");
+      var meta = el("div", "meta");
+      meta.appendChild(el("span", "chip author", cc.member || "?"));
+      meta.appendChild(badge(cc.verdict, VERDICT_KINDS, VERDICT_CN[cc.verdict] || cc.verdict || "?"));
+      meta.appendChild(el("span", "chip", cc.target === "overall" || !cc.target
+        ? "总体" : ("议程 " + cc.target)));
+      meta.appendChild(el("span", "time", fmtTime(cc.ts)));
+      item.appendChild(meta);
+      if (cc.note) item.appendChild(el("div", "k", cc.note));
+      box.appendChild(item);
+    }
+  }
+}
+
+// 落实事项：责任人 / 截止 / 状态；overdue 由上游算好，这里只负责标红
+function actionRow(a, withSource){
+  var row = el("div", a.overdue ? "trow late" : "trow");
+  row.appendChild(el("div", "who", a.owner || "（未指定责任人）"));
+  row.appendChild(el("div", "t", a.what || "（未记录事项）"));
+  var due = el("div", "due", "截止 " + fmtDue(a.due_at));
+  if (a.overdue) due.textContent += "　已逾期";
+  row.appendChild(due);
+  var st = el("div");
+  st.appendChild(badge(a.status, TRACK_KINDS, TRACK_CN[a.status] || a.status || "?"));
+  if (a.overdue) st.appendChild(badge("late", ["late"], "已逾期"));
+  row.appendChild(st);
+  var src = el("div", "src", withSource
+    ? ("来源 " + (a.session_topic || a.session_id || "-")) : ("议程 " +
+        (a.agenda_seq === null || a.agenda_seq === undefined ? "-" : a.agenda_seq)));
+  if (withSource && a.session_id){
+    src.onclick = (function(id){ return function(){ jumpToSession(id); }; })(a.session_id);
+  } else {
+    src.className = "due";
+  }
+  row.appendChild(src);
+  return row;
+}
+
+function issueRow(it, withSource){
+  var row = el("div", it.overdue ? "trow late" : "trow");
+  row.appendChild(el("div", "who", it.owner || "（未指定跟踪人）"));
+  var title = el("div", "t", it.title || "（无题）");
+  if (it.detail) title.appendChild(el("div", "k", it.detail));
+  var ev = evidenceText(it.evidence);
+  if (ev) title.appendChild(el("div", "k", "证据：" + ev));
+  row.appendChild(title);
+  var due = el("div", "due", "截止 " + fmtDue(it.due_at));
+  if (it.next_check_at) due.textContent += "　下次跟进 " + fmtDue(it.next_check_at);
+  if (it.overdue) due.textContent += "　已逾期";
+  row.appendChild(due);
+  var st = el("div");
+  // 疑似缺陷（缺席自动开的单）红标在最前面：它跟普通遗留问题不是一回事
+  if (it.kind === "defect"){
+    st.appendChild(badge("defect", ISSUE_KINDS, ISSUE_KIND_CN.defect));
+  }
+  st.appendChild(badge(it.status, TRACK_KINDS, TRACK_CN[it.status] || it.status || "?"));
+  if (it.overdue) st.appendChild(badge("late", ["late"], "已逾期"));
+  row.appendChild(st);
+  var src = el("div", withSource ? "src" : "due", withSource
+    ? ("来源 " + (it.session_topic || it.session_id || "-")) : "");
+  if (withSource && it.session_id){
+    src.onclick = (function(id){ return function(){ jumpToSession(id); }; })(it.session_id);
+  }
+  row.appendChild(src);
+  return row;
+}
+
+function renderDetail(){
+  var box = $("m-detail");
+  box.innerHTML = "";
+  if (!state.sid){
+    box.appendChild(el("div", "empty", "从左边挑一场会议，这里显示它的逐条发言。"));
+    return;
+  }
+  var d = state.detail;
+  if (!d){
+    box.appendChild(el("div", "empty", "加载中…"));
+    return;
+  }
+  if (d.gone){
+    box.appendChild(el("div", "empty", "这场会议不存在（可能已被换库或 id 打错）。"));
+    return;
+  }
+
+  var s = d.session || {};
+  var head = el("div", "meta");
+  head.appendChild(el("span", "id", s.session_id || "?"));
+  head.appendChild(el("span", "chip topic", s.topic || "-"));
+  head.appendChild(badge(s.state, STATE_KINDS, STATE_CN[s.state] || s.state || "?"));
+  head.appendChild(el("span", "chip", "第 " + (s.round_no || 0) + "/" + (s.max_rounds || 0) + " 轮"));
+  if (s.moderator) head.appendChild(el("span", "chip author", "主持 " + s.moderator));
+  head.appendChild(el("span", "time", fmtTime(s.started_at)));
+  box.appendChild(head);
+
+  // ① 会议目标：最显眼的一块；老会议没这字段就明说"未记录"
+  box.appendChild(el("div", s.goal ? "goal" : "goal none",
+    s.goal ? ("会议目标：" + s.goal) : "会议目标：（未记录目标/议程）"));
+  box.appendChild(el("div", "qfull", s.question || "（无问题描述）"));
+
+  var hint = degradedText(d.degraded);
+  if (hint) box.appendChild(el("div", "warnline", "提示：" + hint));
+
+  // ② 议程　③ 总体结论 + 当场确认　④ 落实事项　⑤ 遗留问题
+  renderAgenda(box, d.agenda_items || [], s.agenda || []);
+  renderConfirm(box, s, d.confirmations || []);
+
+  var actions = d.actions || [];
+  section(box, "落实事项", actions.length);
+  if (!actions.length){
+    box.appendChild(el("div", "empty", "暂无落实事项"));
+  } else {
+    for (var ai = 0; ai < actions.length; ai++) box.appendChild(actionRow(actions[ai], false));
+  }
+
+  var issues = d.issues || [];
+  section(box, "遗留问题", issues.length);
+  if (!issues.length){
+    box.appendChild(el("div", "empty", "暂无遗留问题"));
+  } else {
+    for (var ii = 0; ii < issues.length; ii++) box.appendChild(issueRow(issues[ii], false));
+  }
+
+  // 附：出席率（应到 / 实到 / 缺席名单，缺一个人就标黄；参会人是人还是 Agent 不作区分）
+  section(box, "附：出席情况", (s.members || []).length);
+  box.appendChild(attBlock(s));
+
+  // 折叠的「完整留痕」：这场会的全部发言流水（含 refs 出处）
+  var turns = d.turns || [];
+  var det = el("details", "man");
+  det.appendChild(el("summary", null, "完整留痕 · 本场全部发言（" + turns.length + " 条）"));
+  if (!turns.length){
+    det.appendChild(el("div", "empty", "本场暂无发言记录"));
+  } else {
+    var current = null;
+    for (var i = 0; i < turns.length; i++){
+      var t = turns[i];
+      if (t.round_no !== current){
+        current = t.round_no;
+        det.appendChild(el("div", "roundhead", "第 " + current + " 轮"));
+      }
+      det.appendChild(turnCard(t));
+    }
+  }
+  box.appendChild(det);
+}
+
+// --- 跟踪页签：跨会总清单 -------------------------------------------
+function loadTracking(){
+  var url = "/api/tracking?limit=50";
+  if ($("k-overdue").checked) url += "&overdue=1";
+  return api(url).then(function(res){
+    var b = res.body || {};
+    if (res.status !== 200 || !b.ok){
+      banner("取跟踪清单失败：" + (b.detail || b.error || ("HTTP " + res.status)));
+      state.track = null;
+    } else {
+      banner("");
+      state.track = b;
+      collectOwners(b.actions || []);
+      collectOwners(b.issues || []);
+    }
+    renderTracking();
+  }).catch(function(e){
+    banner("请求失败：" + e); state.track = null; renderTracking();
+  });
+}
+
+function collectOwners(rows){
+  for (var i = 0; i < rows.length; i++){
+    if (rows[i].owner) state.owners[rows[i].owner] = true;
+  }
+  syncSelect("k-owner", state.owners);
+}
+
+// kindAware=true 时才按"性质"筛（只有遗留问题有 issue/defect 之分，落实事项没有）
+function trackVisible(rows, kindAware){
+  var owner = $("k-owner").value, status = $("k-status").value;
+  var kind = $("k-kind").value;
+  var lateOnly = $("k-overdue").checked;
+  return rows.filter(function(r){
+    if (owner && r.owner !== owner) return false;
+    if (status && r.status !== status) return false;
+    if (kindAware && kind && (r.kind || "issue") !== kind) return false;
+    if (lateOnly && !r.overdue) return false;
+    return true;
+  });
+}
+
+function trackHead(cols){
+  var row = el("div", "trow head");
+  for (var i = 0; i < cols.length; i++) row.appendChild(el("div", null, cols[i]));
+  return row;
+}
+
+function num(id, value){
+  $(id).textContent = (value === null || value === undefined) ? "-" : String(value);
+}
+
+function renderTracking(){
+  var aBox = $("k-actions"), iBox = $("k-issues");
+  aBox.innerHTML = "";
+  iBox.innerHTML = "";
+  var d = state.track;
+  if (!d){
+    num("k-aopen", null); num("k-alate", null);
+    num("k-iopen", null); num("k-ilate", null);
+    num("k-dopen", null); num("k-dlate", null);
+    $("k-acount").textContent = "0 条";
+    $("k-icount").textContent = "0 条";
+    aBox.appendChild(el("div", "empty", "没有取到跟踪数据（见顶部提示）"));
+    iBox.appendChild(el("div", "empty", "没有取到跟踪数据（见顶部提示）"));
+    stamp();
+    return;
+  }
+  var counts = d.counts || {};
+  num("k-aopen", counts.actions_open);
+  num("k-alate", counts.actions_overdue);
+  num("k-iopen", counts.issues_open);
+  num("k-ilate", counts.issues_overdue);
+  // 缺陷未闭环数摆在顶部：缺席 = 疑似 Bug，这个数字不该藏在遗留问题的总数里
+  num("k-dopen", counts.defects_open);
+  num("k-dlate", counts.defects_overdue);
+
+  var hint = degradedText(d.degraded);
+  var actions = trackVisible(d.actions || [], false);
+  var issues = trackVisible(d.issues || [], true);
+  $("k-acount").textContent = actions.length + " 条";
+  $("k-icount").textContent = issues.length + " 条";
+
+  if (!actions.length){
+    aBox.appendChild(el("div", "empty", hint || "暂无落实事项"));
+  } else {
+    aBox.appendChild(trackHead(["责任人", "事项", "截止（北京时间）", "状态", "来源会议"]));
+    for (var i = 0; i < actions.length; i++) aBox.appendChild(actionRow(actions[i], true));
+  }
+  if (!issues.length){
+    iBox.appendChild(el("div", "empty", hint || "暂无遗留问题"));
+  } else {
+    iBox.appendChild(trackHead(["跟踪人", "题目 / 证据", "截止（北京时间）",
+                                "性质 · 状态", "来源会议"]));
+    for (var j = 0; j < issues.length; j++) iBox.appendChild(issueRow(issues[j], true));
+  }
+  stamp();
+}
+
+// --- 共享内容模块：任务级（按任务分组）/ 永久（按 kind 分组）-------------
+//
+// 共享内容和会议是两回事：会议存"谁在什么时候定了什么"，共享内容存"大家（含 Agent）
+// 平时要取用的资料"。受众、存的东西、管控要求都不同，所以这里是独立的一块。
+function sharedUrl(){
+  var q = $("s-q").value.trim();
+  var url, sep = "?";
+  if (q){
+    url = "/api/shared/search?q=" + encodeURIComponent(q);
+    if ($("s-sem").checked) url += "&semantic=1";
+    sep = "&";
+  } else {
+    url = "/api/shared";
+  }
+  url += sep + "scope=" + encodeURIComponent(state.sscope) + "&limit=50";
+  var k = $("s-kind").value, o = $("s-owner").value, t = $("s-tag").value;
+  if (k) url += "&kind=" + encodeURIComponent(k);
+  if (o) url += "&owner=" + encodeURIComponent(o);
+  if (t) url += "&tag=" + encodeURIComponent(t);
+  return url;
+}
+
+function loadShared(){
+  return api(sharedUrl()).then(function(res){
+    var b = res.body || {};
+    if (res.status !== 200 || !b.ok){
+      // 上游还没上线 /shared 就是这条路：降级显示原因，不白屏
+      state.shared = {down: true,
+                      why: b.detail || b.error || ("HTTP " + res.status)};
+    } else {
+      banner("");
+      state.shared = b;
+      collectSharedFacets(b);
+    }
+    renderShared();
+  }).catch(function(e){
+    state.shared = {down: true, why: String(e)};
+    renderShared();
+  });
+}
+
+function sharedItems(payload){
+  var rows = (payload.items || []).slice();
+  var tasks = payload.tasks || [];
+  for (var i = 0; i < tasks.length; i++){
+    var sub = tasks[i].items || [];
+    for (var j = 0; j < sub.length; j++) rows.push(sub[j]);
+  }
+  return rows;
+}
+
+function collectSharedFacets(payload){
+  var rows = sharedItems(payload);
+  for (var i = 0; i < rows.length; i++){
+    var r = rows[i];
+    if (r.kind) state.sfacets.kind[r.kind] = true;
+    if (r.owner) state.sfacets.owner[r.owner] = true;
+    var tags = r.tags || [];
+    for (var j = 0; j < tags.length; j++) if (tags[j]) state.sfacets.tag[tags[j]] = true;
+  }
+  syncSelect("s-kind", state.sfacets.kind);
+  syncSelect("s-owner", state.sfacets.owner);
+  syncSelect("s-tag", state.sfacets.tag);
+}
+
+// 高亮口径：已过期 = 红，待复审 / 7 天内将过期 = 黄，已撤下 = 灰。
+// 上游给了 expired/review_due/expiring_soon 就用上游的；没给才拿 now 现算。
+function sharedFlags(it, now){
+  var f = {expired: false, soon: false, review: false,
+           revoked: !!it.revoked, locked: !!(it.sensitive && it.authorized !== true)};
+  var ms = function(ts){ var d = new Date(ts); return isNaN(d.getTime()) ? null : d.getTime(); };
+  var nowMs = ms(now) === null ? Date.now() : ms(now);
+  f.expired = (it.expired === true) ||
+    (it.expired === undefined && it.expires_at && ms(it.expires_at) !== null && ms(it.expires_at) <= nowMs);
+  if (!f.expired && it.expires_at){
+    var left = ms(it.expires_at);
+    f.soon = (it.expiring_soon === true) ||
+      (it.expiring_soon === undefined && left !== null && left - nowMs <= 7 * 86400000);
+  }
+  if (it.review_at){
+    var rv = ms(it.review_at);
+    f.review = (it.review_due === true) ||
+      (it.review_due === undefined && rv !== null && rv <= nowMs);
+  }
+  return f;
+}
+
+function sharedCard(it, now){
+  var f = sharedFlags(it, now);
+  var cls = "sitem";
+  if (f.revoked) cls += " revoked";
+  else if (f.expired) cls += " expired";
+  else if (f.soon || f.review) cls += " soon";
+  if (f.locked) cls += " locked";
+  var box = el("div", cls);
+
+  var head = el("div", "meta");
+  head.appendChild(el("span", "id", "#" + (it.shared_id === undefined ? "?" : it.shared_id)));
+  head.appendChild(el("span", "chip kind", SHARED_KIND_CN[it.kind] || it.kind || "其它"));
+  if (f.locked) head.appendChild(badge("locked", ["locked"], "存在但无权查看"));
+  if (f.revoked) head.appendChild(badge("revoked", ["revoked"], "已撤下"));
+  if (f.expired) head.appendChild(badge("expired", ["expired"], "已过期"));
+  else if (f.soon) head.appendChild(badge("soon", ["soon"], "7 天内到期"));
+  if (f.review) head.appendChild(badge("review", ["review"], "待复审"));
+  head.appendChild(el("span", "time", "v" + (it.version === undefined ? "?" : it.version)));
+  box.appendChild(head);
+
+  if (f.locked){
+    // 标题与正文在服务端就被抹掉了（mask_shared），这里连能显示的字节都没有
+    box.appendChild(el("div", "st", "🔒 存在但无权查看"));
+    box.appendChild(el("div", "k", "这条内容标了 sensitive，当前身份没有授权：标题与正文都不下发。"));
+  } else {
+    box.appendChild(el("div", "st", it.title || "（无题）"));
+    var text = String(it.body === undefined || it.body === null ? "" : it.body);
+    if (text){
+      var open = !!state.sopen[it.shared_id];
+      var body = el("div", open ? "content" : "content clip", text);
+      box.appendChild(body);
+      if (text.length > 160 || text.indexOf("\\n") >= 0){
+        var more = el("div", "more", open ? "收起 ▲" : "展开正文 ▼");
+        more.onclick = (function(id){
+          return function(){
+            if (state.sopen[id]) delete state.sopen[id];
+            else state.sopen[id] = true;
+            renderShared();
+          };
+        })(it.shared_id);
+        box.appendChild(more);
+      } else if (!open){
+        body.className = "content";
+      }
+    }
+    var tags = it.tags || [];
+    if (tags.length){
+      var row = el("div", "tags");
+      for (var t = 0; t < tags.length; t++) row.appendChild(el("span", "chip", tags[t]));
+      box.appendChild(row);
+    }
+  }
+
+  var kvs = el("div", "kvs");
+  var put = function(label, value){
+    var span = el("span");
+    span.appendChild(el("b", null, label + "："));
+    span.appendChild(el("span", null, value));
+    kvs.appendChild(span);
+  };
+  put("维护责任人", it.owner || "（未指定）");
+  put("最后更新", it.updated_at ? fmtTime(it.updated_at) : "（未记录）");
+  put("过期时间", it.expires_at ? fmtDue(it.expires_at) : "不过期");
+  put("下次复审", it.review_at ? fmtDue(it.review_at) : "（未排复审）");
+  box.appendChild(kvs);
+
+  var hist = it.history || [];
+  if (hist.length){
+    var link = el("div", "more", state.shist[it.shared_id]
+      ? ("收起变更历史（" + hist.length + " 条）▲")
+      : ("变更历史（" + hist.length + " 条）▼"));
+    link.onclick = (function(id){
+      return function(){
+        if (state.shist[id]) delete state.shist[id];
+        else state.shist[id] = true;
+        renderShared();
+      };
+    })(it.shared_id);
+    box.appendChild(link);
+    if (state.shist[it.shared_id]){
+      var hbox = el("div", "hist");
+      for (var h = 0; h < hist.length; h++){
+        var e = hist[h] || {};
+        var fields = e.fields || e.changed || [];
+        hbox.appendChild(el("div", "hrow", "v" + (e.version === undefined ? "?" : e.version) +
+          "　" + (e.by || "（不详）") + "　" + (e.at ? fmtTime(e.at) : "（无时间）") +
+          "　改了：" + (fields.length ? fields.join("、") : "（未记录字段）")));
+      }
+      box.appendChild(hbox);
+    }
+  }
+  return box;
+}
+
+function taskGroup(task, now){
+  var box = el("div", "grp");
+  var head = el("div", "gh");
+  head.appendChild(el("span", null, task.title || task.task_id || "（未命名任务）"));
+  head.appendChild(el("span", "chip author", "负责人 " + (task.owner || "（未指定）")));
+  var st = task.status || task.state || "";
+  head.appendChild(el("span", "chip", TASK_STATE_CN[st] || st || "状态未记录"));
+  if (task.destroyed || st === "destroyed"){
+    head.appendChild(badge("revoked", ["revoked"], "已销毁"));
+  } else if (task.ttl_expire_at){
+    var leftMs = new Date(task.ttl_expire_at).getTime() -
+                 (new Date(now).getTime() || Date.now());
+    var leftTxt = isNaN(leftMs) ? "（TTL 未知）"
+      : (leftMs <= 0 ? "TTL 已到期" : ("TTL 剩 " + Math.floor(leftMs / 3600000) + " 小时"));
+    head.appendChild(badge(leftMs <= 0 ? "expired" : "ttl", ["expired", "ttl"], leftTxt));
+  }
+  head.appendChild(el("span", "n", (task.items || []).length + " 条"));
+  box.appendChild(head);
+  var line = el("div", "kvs");
+  var dw = el("span");
+  dw.appendChild(el("b", null, "销毁条件："));
+  dw.appendChild(el("span", null, task.destroy_when || "（未写明销毁条件）"));
+  line.appendChild(dw);
+  box.appendChild(line);
+
+  var items = task.items || [];
+  if (!items.length){
+    box.appendChild(el("div", "empty", "这个任务下暂无共享内容"));
+  } else {
+    for (var i = 0; i < items.length; i++) box.appendChild(sharedCard(items[i], now));
+  }
+  return box;
+}
+
+function renderShared(){
+  var host = $("s-body");
+  host.innerHTML = "";
+  var d = state.shared;
+  if (!d){
+    host.appendChild(el("div", "empty", "加载中…"));
+    stamp();
+    return;
+  }
+  if (d.down){
+    host.appendChild(el("div", "empty",
+      "数据暂时不可用：" + d.why + "　——　共享内容走上游 /shared，等它上线这里就有了。"));
+    $("s-count").textContent = "0";
+    stamp();
+    return;
+  }
+  var now = d.now || new Date().toISOString();
+  var rows = sharedItems(d);
+  $("s-count").textContent = rows.length;
+  var hint = degradedText(d.degraded);
+  if (hint) host.appendChild(el("div", "warnline", "提示：" + hint));
+
+  if (state.sscope === "task"){
+    var tasks = (d.tasks || []).slice();
+    if (!tasks.length){
+      // 上游只给了扁平 items 时，按 task_id 自己分组
+      var byTask = {}, order = [];
+      for (var i = 0; i < rows.length; i++){
+        var r = rows[i];
+        if (r.scope && r.scope !== "task") continue;
+        var key = r.task_id || "（未归属任务）";
+        if (!byTask[key]){ byTask[key] = {task_id: key, title: r.task_title || key, items: []};
+                           order.push(key); }
+        byTask[key].items.push(r);
+      }
+      for (var o = 0; o < order.length; o++) tasks.push(byTask[order[o]]);
+    }
+    if (!tasks.length){
+      host.appendChild(el("div", "empty", "暂无任务级共享内容"));
+    } else {
+      for (var t = 0; t < tasks.length; t++) host.appendChild(taskGroup(tasks[t], now));
+    }
+  } else {
+    var groups = {}, names = [];
+    for (var j = 0; j < rows.length; j++){
+      var it = rows[j];
+      if (it.scope && it.scope !== "permanent") continue;
+      var kind = it.kind || "other";
+      if (!groups[kind]){ groups[kind] = []; names.push(kind); }
+      groups[kind].push(it);
+    }
+    names.sort(function(a, b){
+      var ia = SHARED_KIND_ORDER.indexOf(a), ib = SHARED_KIND_ORDER.indexOf(b);
+      if (ia < 0) ia = 99;
+      if (ib < 0) ib = 99;
+      return ia - ib;
+    });
+    if (!names.length){
+      host.appendChild(el("div", "empty", "暂无永久共享内容"));
+    } else {
+      for (var n = 0; n < names.length; n++){
+        var grp = el("div", "grp");
+        var gh = el("div", "gh");
+        gh.appendChild(el("span", null, SHARED_KIND_CN[names[n]] || names[n]));
+        gh.appendChild(el("span", "n", groups[names[n]].length + " 条"));
+        grp.appendChild(gh);
+        for (var m = 0; m < groups[names[n]].length; m++){
+          grp.appendChild(sharedCard(groups[names[n]][m], now));
+        }
+        host.appendChild(grp);
+      }
+    }
+  }
+  stamp();
+}
+
+// --- Agent 查询手册：端点清单 + 可直接复制的 curl（示例用当前实际数据）---
+function curlBlock(host, title, cmd){
+  host.appendChild(el("div", "p", title));
+  host.appendChild(el("div", "code", cmd));
+}
+
+function renderManual(){
+  var host = $("man-body");
+  host.innerHTML = "";
+  host.appendChild(el("div", "p",
+    "这三个模块都能被 Agent 直接检索：页面看到的每一块数据，背后都是下面这些**只读**端点。" +
+    "看板自己带 token 转发到黑板；直接打黑板要自己带 Authorization: Bearer <token>（token → 成员名，" +
+    "sensitive 内容需要授权才下发，audience 不匹配的条目上游不会返回）。写请求（POST/PUT/PATCH/DELETE）一律 405。"));
+
+  var eps = [
+    ["会议", "/api/sessions?state=&topic=&since=&limit=", "会议场次列表（日历就是按 started_at 按天聚合的）"],
+    ["会议", "/api/sessions/<session_id>", "单场详情：目标 / 议程 / 确认 / 落实 / 遗留 / 逐条发言"],
+    ["会议", "/api/entries?topic=&kind=&author=&limit=", "完整留痕：黑板原始流水"],
+    ["会议", "/api/search?q=&limit=", "黑板语义检索"],
+    ["共享内容", "/api/shared?scope=task|permanent&kind=&owner=&tag=&limit=", "共享内容清单（任务级 / 永久）"],
+    ["共享内容", "/api/shared/search?q=&semantic=1&kind=&owner=&tag=", "共享内容检索，semantic=1 走语义"],
+    ["跟踪", "/api/tracking?overdue=&limit=", "跨会未闭环总清单 + 计数"],
+    ["跟踪", "/api/actions?status=&owner=&overdue=", "落实事项"],
+    ["跟踪", "/api/issues?status=&owner=&kind=defect", "遗留问题 / 疑似缺陷"]
+  ];
+  for (var i = 0; i < eps.length; i++){
+    var row = el("div", "p");
+    row.appendChild(el("span", "chip topic", eps[i][0]));
+    row.appendChild(el("span", "ep", "　" + eps[i][1] + "　"));
+    row.appendChild(el("span", null, eps[i][2]));
+    host.appendChild(row);
+  }
+
+  // 示例里的 id / 关键词用当前页面上真有的那一条，复制就能跑
+  var sid = state.sid || (state.sessions.length ? state.sessions[0].session_id : "<session_id>");
+  var owner = "";
+  var track = state.track || {};
+  var acts = track.actions || [];
+  if (acts.length && acts[0].owner) owner = acts[0].owner;
+  var base = "127.0.0.1:9941";
+  curlBlock(host, "① 会议：某一天有哪些会（列表里带 started_at，按北京时间切日即可）",
+    "curl -s " + base + "/api/sessions?limit=50");
+  curlBlock(host, "② 会议：这一场的四要素 + 全部发言",
+    "curl -s " + base + "/api/sessions/" + sid);
+  curlBlock(host, "③ 共享内容：永久区 + 语义检索（sensitive 未授权只回骨架，没有标题正文）",
+    "curl -s '" + base + "/api/shared?scope=permanent&limit=50'\\n" +
+    "curl -s '" + base + "/api/shared/search?q=备份策略&semantic=1'");
+  curlBlock(host, "④ 跟踪：还没闭环的落实与遗留（只看逾期加 overdue=1" +
+    (owner ? "；只看某人加 owner=" + owner : "") + "）",
+    "curl -s '" + base + "/api/tracking?overdue=1&limit=50'" +
+    (owner ? "\\ncurl -s '" + base + "/api/actions?owner=" + owner + "&status=open'" : ""));
+  curlBlock(host, "⑤ 直接打黑板（9940）要自带 token；看板这一层已经替你带过了",
+    "curl -s -H 'Authorization: Bearer <token>' <NODE_IP>:9940/tracking");
+  host.appendChild(el("div", "p",
+    "只读约定：以上端点只接 GET / HEAD；任何写请求都会拿到 405 method_not_allowed。"));
+}
+
+// --- 自动刷新 -------------------------------------------------------
+function stopAuto(){
+  if (state.timer){ clearInterval(state.timer); state.timer = null; }
+  $("tick").textContent = "";
+}
+
+function startAuto(){
+  stopAuto();
+  if (!CFG.refresh) return;
+  state.left = CFG.refresh;
+  state.timer = setInterval(function(){
+    state.left -= 1;
+    if (state.left <= 0){ state.left = CFG.refresh; reloadCurrent(); }
+    $("tick").textContent = "（" + state.left + "s）";
+  }, 1000);
+}
+
+// 刷新只动当前模块的数据：模块、二级页、已展开的条目/发言、选中的日期与场次全部不变
+function reloadCurrent(){
+  loadHealth();
+  if (state.mod === "meet"){
+    if (state.sub === "board"){
+      load();                       // 完整留痕 = 原来的黑板流水
+    } else {
+      loadSessions();
+      loadTracking();               // 日历上的"有遗留 / 有逾期"要靠跟踪清单来判断
+      if (state.sid) loadDetail(state.sid);
+    }
+  } else if (state.mod === "shared"){
+    loadShared();
+  } else {
+    loadTracking();
+  }
+  renderManual();
+}
+
+function refreshNow(){ reloadCurrent(); if ($("auto").checked) startAuto(); }
+
+// --- 绑定 -----------------------------------------------------------
+$("go").onclick = refreshNow;
+$("clear").onclick = function(){ $("q").value = ""; refreshNow(); };
+$("refresh").onclick = refreshNow;
+$("q").addEventListener("keydown", function(ev){ if (ev.key === "Enter") refreshNow(); });
+$("f-limit").onchange = refreshNow;
+$("f-author").onchange = refreshNow;
+$("f-topic").onchange = refreshNow;
+$("f-kind").onchange = refreshNow;
+
+var segBtns = $("modeseg").getElementsByTagName("button");
+for (var i = 0; i < segBtns.length; i++){
+  segBtns[i].onclick = (function(btn){
+    return function(){
+      for (var j = 0; j < segBtns.length; j++) segBtns[j].className = "";
+      btn.className = "on";
+      state.mode = btn.getAttribute("data-mode");
+      $("q").placeholder = state.mode === "semantic"
+        ? "搜索：用一句话描述你想找的内容（语义检索）"
+        : "搜索：在已加载条目里做关键词匹配";
+      refreshNow();
+    };
+  })(segBtns[i]);
+}
+
+var tabBtns = $("tabs").getElementsByTagName("button");
+for (var ti = 0; ti < tabBtns.length; ti++){
+  tabBtns[ti].onclick = (function(btn){
+    return function(){ switchMod(btn.getAttribute("data-mod")); };
+  })(tabBtns[ti]);
+}
+
+var subBtns = $("subtabs").getElementsByTagName("button");
+for (var si = 0; si < subBtns.length; si++){
+  subBtns[si].onclick = (function(btn){
+    return function(){ switchSub(btn.getAttribute("data-sub")); };
+  })(subBtns[si]);
+}
+
+$("cal-prev").onclick = function(){ shiftMonth(-1); };
+$("cal-next").onclick = function(){ shiftMonth(1); };
+$("cal-recent").onclick = jumpRecentMonth;
+
+$("m-state").onchange = function(){ state.sid = null; state.detail = null; refreshNow(); };
+$("m-clear").onclick = function(){ $("m-q").value = ""; renderSessions(); };
+$("m-q").addEventListener("keydown", function(ev){ if (ev.key === "Enter") renderSessions(); });
+$("m-q").addEventListener("input", renderSessions);
+$("m-range").onchange = renderSessions;
+$("m-member").onchange = renderSessions;
+$("m-unconf").onchange = renderSessions;
+$("m-risk").onchange = renderSessions;
+
+$("man-top").onclick = function(){
+  var man = $("man");
+  man.open = true;
+  man.scrollIntoView(true);
+};
+
+// 责任人 / 状态是本地筛选（数据都在手里），只有"只看逾期"要回上游重拉一遍
+$("k-owner").onchange = renderTracking;
+$("k-status").onchange = renderTracking;
+$("k-kind").onchange = renderTracking;
+$("k-overdue").onchange = function(){ loadTracking(); };
+
+var scopeBtns = $("s-scope").getElementsByTagName("button");
+for (var qi = 0; qi < scopeBtns.length; qi++){
+  scopeBtns[qi].onclick = (function(btn){
+    return function(){
+      state.sscope = btn.getAttribute("data-scope");
+      for (var j = 0; j < scopeBtns.length; j++){
+        scopeBtns[j].className = (scopeBtns[j] === btn) ? "on" : "";
+      }
+      loadShared();
+    };
+  })(scopeBtns[qi]);
+}
+
+$("s-go").onclick = loadShared;
+$("s-clear").onclick = function(){ $("s-q").value = ""; loadShared(); };
+$("s-q").addEventListener("keydown", function(ev){ if (ev.key === "Enter") loadShared(); });
+$("s-sem").onchange = loadShared;
+$("s-kind").onchange = loadShared;
+$("s-owner").onchange = loadShared;
+$("s-tag").onchange = loadShared;
+
+$("auto").checked = !!CFG.refresh;
+$("auto").disabled = !CFG.refresh;
+$("auto").onchange = function(){ if (this.checked) startAuto(); else stopAuto(); };
+
+paintMod();
+paintSub();
+renderDetail();
+refreshNow();
+if (CFG.refresh) startAuto();
+</script>
+</body>
+</html>

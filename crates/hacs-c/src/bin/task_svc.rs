@@ -46,8 +46,10 @@ fn one(q: &str, key: &str, d: Option<&str>) -> Option<String> {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let (mut host, mut port, mut db) = ("0.0.0.0".to_string(), 9981u16, task_svc::default_db_path());
-    let mut chat_base = std::env::var("CHAT_BASE").unwrap_or_else(|_| hacs_l0_host::node_profile::chat_base_default());
+    let (mut host, mut port, mut db) =
+        ("0.0.0.0".to_string(), 9981u16, task_svc::default_db_path());
+    let mut chat_base = std::env::var("CHAT_BASE")
+        .unwrap_or_else(|_| hacs_l0_host::node_profile::chat_base_default());
     let mut whitelist_env = std::env::var("TASK_AGENT_WHITELIST").unwrap_or_default();
     let mut lease_s_default: i64 = std::env::var("TASK_LEASE_S")
         .ok()
@@ -62,7 +64,10 @@ fn main() {
             "--chat-base" => chat_base = args.next().unwrap_or(chat_base),
             "--agent-whitelist" => whitelist_env = args.next().unwrap_or(whitelist_env),
             "--lease-s" => {
-                lease_s_default = args.next().and_then(|v| v.parse().ok()).unwrap_or(lease_s_default)
+                lease_s_default = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(lease_s_default)
             }
             "--no-reply" => no_reply = true,
             _ => {}
@@ -114,8 +119,12 @@ fn main() {
             }
             for row in rt2.store.reply_pending(rt2.retry_max, 20) {
                 if let Some(tid) = row.get("task_id").and_then(Value::as_str) {
-                    rt2.store
-                        .reply_deliver(tid, &rt2.chat_base, &rt2.agent_fallback, rt2.retry_max);
+                    rt2.store.reply_deliver(
+                        tid,
+                        &rt2.chat_base,
+                        &rt2.agent_fallback,
+                        rt2.retry_max,
+                    );
                 }
             }
         });
@@ -149,12 +158,18 @@ fn main() {
     let rt_h = rt.clone();
     gw.route("/tasks", &["GET"], false, move |req| {
         let Some(group) = one(&req.query, "group", None) else {
-            return Ok(Reply::json(400, json!({"ok": false, "error": "group_required"})));
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "group_required"}),
+            ));
         };
         let status = one(&req.query, "status", None).filter(|s| !s.is_empty());
         if let Some(st) = &status {
             if !task_svc::VALID_STATUS.contains(&st.as_str()) {
-                return Ok(Reply::json(400, json!({"ok": false, "error": "bad_status"})));
+                return Ok(Reply::json(
+                    400,
+                    json!({"ok": false, "error": "bad_status"}),
+                ));
             }
         }
         let limit: i64 = one(&req.query, "limit", Some("500"))
@@ -203,7 +218,10 @@ fn main() {
     });
     let rt_h = rt.clone();
     gw.route("/chains", &["GET"], false, move |_req| {
-        Ok(Reply::json(200, json!({"ok": true, "frozen": rt_h.store.freeze_list()})))
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "frozen": rt_h.store.freeze_list()}),
+        ))
     });
     let rt_h = rt.clone();
     gw.route("/tasks", &["GET"], true, move |req| {
@@ -219,16 +237,28 @@ fn main() {
     gw.route("/tasks", &["POST"], false, move |req| {
         let body = match req.json_body(1 << 20) {
             Ok(v) => v,
-            Err(e) => return Ok(Reply::json(e.status, json!({"ok": false, "error": "bad_json"}))),
+            Err(e) => {
+                return Ok(Reply::json(
+                    e.status,
+                    json!({"ok": false, "error": "bad_json"}),
+                ))
+            }
         };
         let group = body
             .get("group_id")
             .and_then(Value::as_str)
             .or_else(|| body.get("group").and_then(Value::as_str))
             .unwrap_or("");
-        let title = body.get("title").and_then(Value::as_str).unwrap_or("").trim();
+        let title = body
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
         if group.is_empty() || title.is_empty() {
-            return Ok(Reply::json(400, json!({"ok": false, "error": "group_and_title_required"})));
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "group_and_title_required"}),
+            ));
         }
         let as_i64 = |k: &str| body.get(k).and_then(Value::as_i64);
         let as_str = |k: &str| body.get(k).and_then(Value::as_str);
@@ -254,8 +284,14 @@ fn main() {
         ) {
             Err(e) => Ok(Reply::json(400, json!({"ok": false, "error": e}))),
             Ok(t) => {
-                if t.get("already_exists").and_then(Value::as_bool).unwrap_or(false) {
-                    Ok(Reply::json(200, json!({"ok": true, "already_exists": true, "task": t})))
+                if t.get("already_exists")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    Ok(Reply::json(
+                        200,
+                        json!({"ok": true, "already_exists": true, "task": t}),
+                    ))
                 } else {
                     Ok(Reply::json(201, json!({"ok": true, "task": t})))
                 }
@@ -275,9 +311,17 @@ fn main() {
             .unwrap_or("")
             .trim()
             .to_string();
-        let agent = body.get("agent").and_then(Value::as_str).unwrap_or("").trim().to_string();
+        let agent = body
+            .get("agent")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
         if tid.is_empty() || agent.is_empty() {
-            return Ok(Reply::json(400, json!({"ok": false, "error": "task_id_and_agent_required"})));
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "task_id_and_agent_required"}),
+            ));
         }
         // Python `int(lease_s)`：解析失败 → bad_lease_s
         let lease_s = match body.get("lease_s") {
@@ -288,12 +332,17 @@ fn main() {
                 None => match v.as_str().and_then(|s| s.parse::<i64>().ok()) {
                     Some(n) => Some(n),
                     None => {
-                        return Ok(Reply::json(400, json!({"ok": false, "error": "bad_lease_s"})))
+                        return Ok(Reply::json(
+                            400,
+                            json!({"ok": false, "error": "bad_lease_s"}),
+                        ))
                     }
                 },
             },
         };
-        let r = rt_h.store.ack(&tid, &agent, lease_s, rt_h.lease_s_default, &rt_h.whitelist);
+        let r = rt_h
+            .store
+            .ack(&tid, &agent, lease_s, rt_h.lease_s_default, &rt_h.whitelist);
         if r.get("ok").and_then(Value::as_bool).unwrap_or(false) {
             return Ok(Reply::json(200, r));
         }
@@ -312,9 +361,17 @@ fn main() {
             Ok(v) => v,
             Err(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_json"}))),
         };
-        let cid = body.get("chain_id").and_then(Value::as_str).unwrap_or("").trim().to_string();
+        let cid = body
+            .get("chain_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
         if cid.is_empty() {
-            return Ok(Reply::json(400, json!({"ok": false, "error": "chain_id_required"})));
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "chain_id_required"}),
+            ));
         }
         Ok(Reply::json(
             200,
@@ -323,7 +380,10 @@ fn main() {
     });
     let rt_h = rt.clone();
     gw.route("/tasks/lease/reap", &["POST"], false, move |_req| {
-        Ok(Reply::json(200, json!({"ok": true, "reaped": rt_h.store.reap_leases(rt_h.max_dispatch)})))
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "reaped": rt_h.store.reap_leases(rt_h.max_dispatch)}),
+        ))
     });
     let rt_h = rt.clone();
     gw.route("/tasks", &["POST"], true, move |req| {
@@ -346,7 +406,11 @@ fn main() {
             }
             // 首次汇报（非重复）→ 立刻投递回帖；重复汇报**绝不重发**。
             let mut r = r;
-            if !r.get("already_reported").and_then(Value::as_bool).unwrap_or(false) {
+            if !r
+                .get("already_reported")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
                 let delivered = rt_h.store.reply_deliver(
                     tid,
                     &rt_h.chat_base,
@@ -362,7 +426,10 @@ fn main() {
         if parts.len() == 2 && parts[0] == "tasks" && parts[1] == "next" {
             return Ok(Reply::json(405, json!({"ok": false, "error": "use_GET"})));
         }
-        Ok(Reply::json(404, json!({"ok": false, "error": "no_route", "path": req.path})))
+        Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "no_route", "path": req.path}),
+        ))
     });
 
     // ---- PATCH / DELETE -------------------------------------------------
@@ -370,21 +437,24 @@ fn main() {
     gw.route("/tasks", &["PATCH"], true, move |req| {
         let parts: Vec<&str> = req.path.trim_matches('/').split('/').collect();
         if parts.len() != 2 || parts[0] != "tasks" {
-            return Ok(Reply::json(404, json!({"ok": false, "error": "no_route", "path": req.path})));
+            return Ok(Reply::json(
+                404,
+                json!({"ok": false, "error": "no_route", "path": req.path}),
+            ));
         }
         let body = match req.json_body(1 << 20) {
             Ok(v) => v,
             Err(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_json"}))),
         };
         match rt_h.store.patch(
-                parts[1],
-                &body,
-                rt_h.no_reply,
-                &rt_h.whitelist,
-                &rt_h.chat_base,
-                &rt_h.agent_fallback,
-                rt_h.retry_max,
-            ) {
+            parts[1],
+            &body,
+            rt_h.no_reply,
+            &rt_h.whitelist,
+            &rt_h.chat_base,
+            &rt_h.agent_fallback,
+            rt_h.retry_max,
+        ) {
             Err(e) => Ok(Reply::json(400, json!({"ok": false, "error": e}))),
             Ok(None) => Ok(Reply::json(404, json!({"ok": false, "error": "not_found"}))),
             Ok(Some(t)) => {
@@ -402,7 +472,10 @@ fn main() {
     gw.route("/tasks", &["DELETE"], true, move |req| {
         let parts: Vec<&str> = req.path.trim_matches('/').split('/').collect();
         if parts.len() != 2 || parts[0] != "tasks" {
-            return Ok(Reply::json(404, json!({"ok": false, "error": "no_route", "path": req.path})));
+            return Ok(Reply::json(
+                404,
+                json!({"ok": false, "error": "no_route", "path": req.path}),
+            ));
         }
         if !rt_h.store.delete(parts[1]) {
             return Ok(Reply::json(404, json!({"ok": false, "error": "not_found"})));
@@ -410,7 +483,12 @@ fn main() {
         Ok(Reply::json(200, json!({"ok": true, "deleted": parts[1]})))
     });
 
-    gw.not_found(move |req| Ok(Reply::json(404, json!({"ok": false, "error": "no_route", "path": req.path}))));
+    gw.not_found(move |req| {
+        Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "no_route", "path": req.path}),
+        ))
+    });
 
     eprintln!("task_svc starting host={host} port={port} db={db}");
     if let Err(e) = gw.serve(&host, port) {

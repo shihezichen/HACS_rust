@@ -15,10 +15,10 @@
 //! 鉴权：`Authorization: Bearer <token>` 的 sha256 反查 peers.json（恒时比较）。
 #![allow(clippy::too_many_arguments)]
 
+use hacs_l1_transport::a2a_edge::{auth_peer, load_peers};
 use hacs_l1_transport::web_gateway::{Gateway, Reply};
 use hacs_l3_domain::blackboard_svc as bb;
 use hacs_l3_domain::blackboard_svc::{ApiError, BbSvc};
-use hacs_l1_transport::a2a_edge::{auth_peer, load_peers};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -39,13 +39,15 @@ fn main() {
     }
     let runtime = Arc::new(bb::Runtime::new());
     if let Some(p) = &agents_json {
-        match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| {
-            let v: Value = serde_json::from_str(&t).map_err(|e| e.to_string())?;
-            v.get("node_id")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .ok_or_else(|| "agents.json 顶层必须是对象".to_string())
-        }) {
+        match std::fs::read_to_string(p)
+            .map_err(|e| e.to_string())
+            .and_then(|t| {
+                let v: Value = serde_json::from_str(&t).map_err(|e| e.to_string())?;
+                v.get("node_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .ok_or_else(|| "agents.json 顶层必须是对象".to_string())
+            }) {
             Ok(nid) => *runtime.node_id.lock().unwrap() = nid,
             Err(e) => {
                 eprintln!("加载 agents.json 失败: {}", bb::safe_err(&e));
@@ -89,7 +91,14 @@ fn main() {
     };
     let _ = PEER_MAP.set(peer_map.clone());
     let svc = Arc::new(BbSvc::new(
-        store.unwrap_or_else(|| Arc::new(bb::BbStore::connect("host=127.0.0.1 port=1 dbname=none user=none connect_timeout=1").expect("占位存储"))),
+        store.unwrap_or_else(|| {
+            Arc::new(
+                bb::BbStore::connect(
+                    "host=127.0.0.1 port=1 dbname=none user=none connect_timeout=1",
+                )
+                .expect("占位存储"),
+            )
+        }),
         runtime.clone(),
         peer_map,
     ));
@@ -104,7 +113,9 @@ fn main() {
                 Ok(n) => {
                     *svc2.runtime.tmp_swept_at.lock().unwrap() = Some(bb::iso_z(bb::now_micros()));
                     *svc2.runtime.tmp_sweep_error.lock().unwrap() = None;
-                    svc2.runtime.tmp_sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    svc2.runtime
+                        .tmp_sweeps
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if n > 0 {
                         println!("tmp 兜底 sweep 销毁 {} 条", n);
                     }
@@ -119,8 +130,12 @@ fn main() {
                 Ok(n) => {
                     *svc2.runtime.sess_swept_at.lock().unwrap() = Some(bb::iso_z(bb::now_micros()));
                     *svc2.runtime.sess_sweep_error.lock().unwrap() = None;
-                    svc2.runtime.sess_sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    svc2.runtime.sess_archived.fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed);
+                    svc2.runtime
+                        .sess_sweeps
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    svc2.runtime
+                        .sess_archived
+                        .fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed);
                     if n > 0 {
                         println!("session 兜底 sweep 归档 {} 场", n);
                     }
@@ -135,7 +150,9 @@ fn main() {
                 Ok(_n) => {
                     *svc2.runtime.msg_swept_at.lock().unwrap() = Some(bb::iso_z(bb::now_micros()));
                     *svc2.runtime.msg_sweep_error.lock().unwrap() = None;
-                    svc2.runtime.msg_sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    svc2.runtime
+                        .msg_sweeps
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
                 Err(e) => {
                     if bb::is_missing_schema(&e.0) {
@@ -183,17 +200,16 @@ fn main() {
         };
     }
 
-
-
-
-
-
     fn int_field(value: Option<&Value>, field: &str) -> Result<Option<i64>, ApiError> {
         match value {
             None | Some(Value::Null) => Ok(None),
-            Some(Value::Bool(_)) => Err(ApiError::new(400, "bad_request").detail(format!("{} 必须是整数", field))),
+            Some(Value::Bool(_)) => {
+                Err(ApiError::new(400, "bad_request").detail(format!("{} 必须是整数", field)))
+            }
             Some(Value::Number(n)) if n.is_i64() => Ok(Some(n.as_i64().unwrap())),
-            Some(_) => Err(ApiError::new(400, "bad_request").detail(format!("{} 必须是整数", field))),
+            Some(_) => {
+                Err(ApiError::new(400, "bad_request").detail(format!("{} 必须是整数", field)))
+            }
         }
     }
     fn is_shared_path(parts: &[&str]) -> bool {
@@ -400,24 +416,31 @@ fn main() {
         let rt_h = svc.clone();
         gw.route("/entries", &["GET"], false, move |req| {
             let _peer = peer_or!(req);
-            let limit = match clamp_limit(&one(&req.query, "limit"), bb::DEFAULT_LIMIT, bb::MAX_LIMIT) {
-                Ok(v) => v,
-                Err(e) => return Ok(Reply::json(e.status, e.body())),
-            };
+            let limit =
+                match clamp_limit(&one(&req.query, "limit"), bb::DEFAULT_LIMIT, bb::MAX_LIMIT) {
+                    Ok(v) => v,
+                    Err(e) => return Ok(Reply::json(e.status, e.body())),
+                };
             let since = match parse_since(&one(&req.query, "since")) {
                 Ok(v) => v,
                 Err(e) => return Ok(Reply::json(e.status, e.body())),
             };
             let st = one(&req.query, "status");
-            let entries = db_or_503!(rt_h.select_entries(
-                non_empty(&one(&req.query, "topic")).as_deref(),
-                non_empty(&one(&req.query, "kind")).as_deref(),
-                non_empty(&one(&req.query, "author")).as_deref(),
-                limit,
-                since.as_deref(),
-                non_empty(&st).as_deref(),
-            ), peer);
-            Ok(Reply::json(200, json!({"ok": true, "entries": entries, "count": entries.len()})))
+            let entries = db_or_503!(
+                rt_h.select_entries(
+                    non_empty(&one(&req.query, "topic")).as_deref(),
+                    non_empty(&one(&req.query, "kind")).as_deref(),
+                    non_empty(&one(&req.query, "author")).as_deref(),
+                    limit,
+                    since.as_deref(),
+                    non_empty(&st).as_deref(),
+                ),
+                peer
+            );
+            Ok(Reply::json(
+                200,
+                json!({"ok": true, "entries": entries, "count": entries.len()}),
+            ))
         });
     }
     {
@@ -514,7 +537,11 @@ fn main() {
         let rt_h = svc.clone();
         gw.route("/sessions", &["GET"], false, move |req| {
             let _peer = peer_or!(req);
-            let limit = match clamp_limit(&one(&req.query, "limit"), bb::SESSIONS_DEFAULT_LIMIT, bb::SESSIONS_MAX_LIMIT) {
+            let limit = match clamp_limit(
+                &one(&req.query, "limit"),
+                bb::SESSIONS_DEFAULT_LIMIT,
+                bb::SESSIONS_MAX_LIMIT,
+            ) {
                 Ok(v) => v,
                 Err(e) => return Ok(Reply::json(e.status, e.body())),
             };
@@ -522,13 +549,19 @@ fn main() {
                 Ok(v) => v,
                 Err(e) => return Ok(Reply::json(e.status, e.body())),
             };
-            let sessions = db_or_503!(rt_h.select_agent_sessions(
-                non_empty(&one(&req.query, "state")).as_deref(),
-                non_empty(&one(&req.query, "topic")).as_deref(),
-                limit,
-                since.as_deref(),
-            ), peer);
-            Ok(Reply::json(200, json!({"ok": true, "count": sessions.len(), "sessions": sessions})))
+            let sessions = db_or_503!(
+                rt_h.select_agent_sessions(
+                    non_empty(&one(&req.query, "state")).as_deref(),
+                    non_empty(&one(&req.query, "topic")).as_deref(),
+                    limit,
+                    since.as_deref(),
+                ),
+                peer
+            );
+            Ok(Reply::json(
+                200,
+                json!({"ok": true, "count": sessions.len(), "sessions": sessions}),
+            ))
         });
     }
     {
@@ -541,9 +574,16 @@ fn main() {
             let _peer = peer_or!(req);
             let session_id = urldecode(parts[1]);
             if session_id.is_empty() || session_id.len() > bb::SESSION_ID_MAX {
-                return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这场会议"})));
+                return Ok(Reply::json(
+                    404,
+                    json!({"ok": false, "error": "not_found", "detail": "没有这场会议"}),
+                ));
             }
-            let _limit = match clamp_limit(&one(&req.query, "limit"), bb::TURNS_DEFAULT_LIMIT, bb::SESSIONS_MAX_LIMIT) {
+            let _limit = match clamp_limit(
+                &one(&req.query, "limit"),
+                bb::TURNS_DEFAULT_LIMIT,
+                bb::SESSIONS_MAX_LIMIT,
+            ) {
                 Ok(v) => v,
                 Err(e) => return Ok(Reply::json(e.status, e.body())),
             };
@@ -551,7 +591,10 @@ fn main() {
             let now_iso = bb::iso_utc_now();
             let detail = db_or_503!(rt_h.select_agent_session(&session_id), peer);
             let Some(mut payload) = detail else {
-                return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这场会议"})));
+                return Ok(Reply::json(
+                    404,
+                    json!({"ok": false, "error": "not_found", "detail": "没有这场会议"}),
+                ));
             };
             let obj = payload.as_object_mut().unwrap();
             obj.insert("ok".into(), Value::Bool(true));
@@ -565,15 +608,21 @@ fn main() {
     // ---- GET /actions | /issues | /tracking --------------------------------
     {
         let rt_h = svc.clone();
-        gw.route("/actions", &["GET"], false, move |req| tracking_route(&rt_h, req, "actions"))
+        gw.route("/actions", &["GET"], false, move |req| {
+            tracking_route(&rt_h, req, "actions")
+        })
     }
     {
         let rt_h = svc.clone();
-        gw.route("/issues", &["GET"], false, move |req| tracking_route(&rt_h, req, "issues"))
+        gw.route("/issues", &["GET"], false, move |req| {
+            tracking_route(&rt_h, req, "issues")
+        })
     }
     {
         let rt_h = svc.clone();
-        gw.route("/tracking", &["GET"], false, move |req| tracking_route(&rt_h, req, "tracking"))
+        gw.route("/tracking", &["GET"], false, move |req| {
+            tracking_route(&rt_h, req, "tracking")
+        })
     }
 
     // ---- tmp box -----------------------------------------------------------
@@ -886,11 +935,15 @@ fn main() {
     // ---- /api/shared、/shared（只读）----------------------------------------
     {
         let rt_h = svc.clone();
-        gw.route("/api/shared", &["GET"], true, move |req| shared_route(&rt_h, req))
+        gw.route("/api/shared", &["GET"], true, move |req| {
+            shared_route(&rt_h, req)
+        })
     }
     {
         let rt_h = svc.clone();
-        gw.route("/shared", &["GET"], true, move |req| shared_route(&rt_h, req))
+        gw.route("/shared", &["GET"], true, move |req| {
+            shared_route(&rt_h, req)
+        })
     }
 
     // ---- 未登记路径：GET/POST 裸 404 ----------------------------------------
@@ -938,7 +991,11 @@ fn main() {
             Ok(Reply::json(code, payload))
         });
         agw.not_found(|_req| {
-            Ok(Reply::bytes(404, "application/json; charset=utf-8", b"{\"ok\":false,\"error\":\"not_found\"}".to_vec()))
+            Ok(Reply::bytes(
+                404,
+                "application/json; charset=utf-8",
+                b"{\"ok\":false,\"error\":\"not_found\"}".to_vec(),
+            ))
         });
         let agw = std::sync::Mutex::new(agw);
         let port_a = admin_port;
@@ -956,7 +1013,11 @@ fn main() {
 }
 
 fn non_empty(s: &str) -> Option<String> {
-    if s.trim().is_empty() { None } else { Some(s.trim().to_string()) }
+    if s.trim().is_empty() {
+        None
+    } else {
+        Some(s.trim().to_string())
+    }
 }
 
 fn sess_close_payload(session: &Value, already: bool) -> Value {
@@ -983,111 +1044,236 @@ fn sess_detail(
 ) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let session_id = urldecode(raw_id);
     if !bb::session_id_ok(&session_id) {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这个会话"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这个会话"}),
+        ));
     }
-    let limit = match clamp_limit(&one(query, "limit"), default_limit, bb::SESS_TURNS_MAX_LIMIT) {
+    let limit = match clamp_limit(
+        &one(query, "limit"),
+        default_limit,
+        bb::SESS_TURNS_MAX_LIMIT,
+    ) {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
     let session = match rt.select_agent_session(&session_id) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let Some(session) = session else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这个会话"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这个会话"}),
+        ));
     };
     if !bb::sess_visible_to(&session, peer) {
-        return Ok(Reply::json(403, json!({"ok": false, "error": "forbidden", "detail": "这个会话没有邀请你"})));
+        return Ok(Reply::json(
+            403,
+            json!({"ok": false, "error": "forbidden", "detail": "这个会话没有邀请你"}),
+        ));
     }
     let turns = match rt.select_agent_turns(&session_id, limit) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let count = turns.len();
-    Ok(Reply::json(200, if with_session {
-        json!({"ok": true, "session": session, "turns": turns, "count": count, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"})
-    } else {
-        json!({"ok": true, "session_id": session_id, "state": session.get("state"), "count": count, "turn_count": session.get("turn_count"), "turns": turns, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"})
-    }))
+    Ok(Reply::json(
+        200,
+        if with_session {
+            json!({"ok": true, "session": session, "turns": turns, "count": count, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"})
+        } else {
+            json!({"ok": true, "session_id": session_id, "state": session.get("state"), "count": count, "turn_count": session.get("turn_count"), "turns": turns, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"})
+        },
+    ))
 }
 
-fn sess_turn_write(rt: &BbSvc, peer: &str, session_id: &str, req: &hacs_l1_transport::web_gateway::Request) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn sess_turn_write(
+    rt: &BbSvc,
+    peer: &str,
+    session_id: &str,
+    req: &hacs_l1_transport::web_gateway::Request,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let body = req.body.clone();
     if body.len() > bb::MAX_BODY_BYTES {
-        return Ok(Reply::json(413, json!({"ok": false, "error": "payload_too_large", "detail": format!("请求体上限 {} 字节", bb::MAX_BODY_BYTES)})));
+        return Ok(Reply::json(
+            413,
+            json!({"ok": false, "error": "payload_too_large", "detail": format!("请求体上限 {} 字节", bb::MAX_BODY_BYTES)}),
+        ));
     }
     let v: Value = match serde_json::from_slice::<Value>(&body) {
         Ok(v) if v.is_object() => v,
-        Ok(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "body 必须是 JSON 对象"}))),
-        Err(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "body 不是合法 JSON"}))),
+        Ok(_) => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "body 必须是 JSON 对象"}),
+            ))
+        }
+        Err(_) => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "body 不是合法 JSON"}),
+            ))
+        }
     };
     let role = match v.get("role") {
-        Some(Value::String(s)) if bb::SESS_ROLES.contains(&s.trim().to_ascii_lowercase().as_str()) => s.trim().to_ascii_lowercase(),
-        _ => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "role 必须是 user / assistant / system 之一"}))),
+        Some(Value::String(s))
+            if bb::SESS_ROLES.contains(&s.trim().to_ascii_lowercase().as_str()) =>
+        {
+            s.trim().to_ascii_lowercase()
+        }
+        _ => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "role 必须是 user / assistant / system 之一"}),
+            ))
+        }
     };
     let content = match norm_text(v.get("content"), "content", false, "") {
         Ok(c) => c,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
     if content.chars().count() > bb::MAX_BODY_BYTES {
-        return Ok(Reply::json(413, json!({"ok": false, "error": "payload_too_large", "detail": format!("content 超过 {} 字符", bb::MAX_BODY_BYTES)})));
+        return Ok(Reply::json(
+            413,
+            json!({"ok": false, "error": "payload_too_large", "detail": format!("content 超过 {} 字符", bb::MAX_BODY_BYTES)}),
+        ));
     }
     let content_ref: Option<Value> = match v.get("content_ref") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) => {
             let t = s.trim();
-            if t.is_empty() { None } else { Some(json!(t)) }
+            if t.is_empty() {
+                None
+            } else {
+                Some(json!(t))
+            }
         }
         Some(x @ Value::Object(_)) if !x.as_object().unwrap().is_empty() => Some(x.clone()),
         Some(Value::Object(_)) => None,
-        Some(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "content_ref 必须是字符串或对象"}))),
+        Some(_) => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "content_ref 必须是字符串或对象"}),
+            ))
+        }
     };
     let to_member: Option<String> = match v.get("to_member") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
-        Some(_) => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "to_member 必须是非空字符串"}))),
+        Some(_) => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "to_member 必须是非空字符串"}),
+            ))
+        }
     };
     if content.trim().is_empty() && content_ref.is_none() {
-        return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "content 与 content_ref 至少要有一个"})));
+        return Ok(Reply::json(
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "content 与 content_ref 至少要有一个"}),
+        ));
     }
-    if v.get("from_member").or(v.get("from")).and_then(Value::as_str).is_some() {
-        println!("忽略 turns 请求体里的 from 字段（身份只认 token）actual={}", peer);
+    if v.get("from_member")
+        .or(v.get("from"))
+        .and_then(Value::as_str)
+        .is_some()
+    {
+        println!(
+            "忽略 turns 请求体里的 from 字段（身份只认 token）actual={}",
+            peer
+        );
     }
     let session = match rt.select_agent_session(session_id) {
         Ok(s) => s,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let Some(session) = session else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这个会话"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这个会话"}),
+        ));
     };
     if !bb::sess_visible_to(&session, peer) {
-        return Ok(Reply::json(403, json!({"ok": false, "error": "forbidden", "detail": "这个会话没有邀请你"})));
+        return Ok(Reply::json(
+            403,
+            json!({"ok": false, "error": "forbidden", "detail": "这个会话没有邀请你"}),
+        ));
     }
-    match rt.insert_agent_turn(session_id, peer, to_member.as_deref(), &role, &content, content_ref.as_ref()) {
+    match rt.insert_agent_turn(
+        session_id,
+        peer,
+        to_member.as_deref(),
+        &role,
+        &content,
+        content_ref.as_ref(),
+    ) {
         Err(e) => {
             let low = e.0.to_lowercase();
-            if low.contains("closed") || low.contains("expired") || low.contains("terminal")
-                || low.contains("not open") || e.0.contains("不是 open")
+            if low.contains("closed")
+                || low.contains("expired")
+                || low.contains("terminal")
+                || low.contains("not open")
+                || e.0.contains("不是 open")
             {
-                return Ok(Reply::json(409, json!({"ok": false, "error": "session_not_open", "detail": "这场会话已经结束了，不能再追加轮次"})));
+                return Ok(Reply::json(
+                    409,
+                    json!({"ok": false, "error": "session_not_open", "detail": "这场会话已经结束了，不能再追加轮次"}),
+                ));
             }
-            Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)})))
+            Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
         }
-        Ok(turn) => Ok(Reply::json(201, json!({"ok": true, "session_id": session_id, "turn": turn, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"}))),
+        Ok(turn) => Ok(Reply::json(
+            201,
+            json!({"ok": true, "session_id": session_id, "turn": turn, "now": bb::iso_z(bb::now_micros()), "tz": "UTC"}),
+        )),
     }
 }
 
-fn tmp_read(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn tmp_read(
+    rt: &BbSvc,
+    peer: &str,
+    raw_id: &str,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let tmp_id = urldecode(raw_id);
     if !bb::tmp_id_ok(&tmp_id) {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"}),
+        ));
     }
     let item = match rt.select_tmp(&tmp_id) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let Some(item) = item else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"}),
+        ));
     };
     let audience: Vec<Value> = item
         .get("audience")
@@ -1097,31 +1283,68 @@ fn tmp_read(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_trans
     if item.get("owner").and_then(Value::as_str) != Some(peer)
         && !audience.iter().any(|a| a.as_str() == Some(peer))
     {
-        return Ok(Reply::json(403, json!({"ok": false, "error": "forbidden", "detail": "这条临时共享没有共享给你"})));
+        return Ok(Reply::json(
+            403,
+            json!({"ok": false, "error": "forbidden", "detail": "这条临时共享没有共享给你"}),
+        ));
     }
-    if item.get("destroyed").and_then(Value::as_bool).unwrap_or(false) {
-        return tmp_gone(peer, &item, item.get("destroy_reason").and_then(Value::as_str).unwrap_or("destroyed"), None);
+    if item
+        .get("destroyed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return tmp_gone(
+            peer,
+            &item,
+            item.get("destroy_reason")
+                .and_then(Value::as_str)
+                .unwrap_or("destroyed"),
+            None,
+        );
     }
-    if item.get("expired").and_then(Value::as_bool).unwrap_or(false) {
+    if item
+        .get("expired")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         let ts = rt.tmp_expire_now(&tmp_id).unwrap_or(None);
-        return tmp_gone(peer, &item, "expired", Some(ts.unwrap_or_else(|| bb::iso_z(bb::now_micros()))));
+        return tmp_gone(
+            peer,
+            &item,
+            "expired",
+            Some(ts.unwrap_or_else(|| bb::iso_z(bb::now_micros()))),
+        );
     }
     let body = item.get("body").cloned().unwrap_or(Value::Null);
     let mut repeat = false;
     let mut destroyed = false;
     let mut reads_count = item.get("reads_count").and_then(Value::as_i64).unwrap_or(0);
     let mut reads_max = item.get("reads_max").and_then(Value::as_i64).unwrap_or(0);
-    let readers: Vec<Value> = item.get("readers").and_then(Value::as_array).cloned().unwrap_or_default();
+    let readers: Vec<Value> = item
+        .get("readers")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     if readers.iter().any(|r| r.as_str() == Some(peer)) {
         repeat = true;
     } else {
         match rt.tmp_counted_read(&tmp_id, peer) {
-            Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+            Err(e) => {
+                return Ok(Reply::json(
+                    503,
+                    json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+                ))
+            }
             Ok(None) => {
                 // 并发：被抢先销毁 / 同人的并发读 → 回读真源
                 let fresh = match rt.select_tmp(&tmp_id) {
                     Ok(f) => f,
-                    Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+                    Err(e) => {
+                        return Ok(Reply::json(
+                            503,
+                            json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+                        ))
+                    }
                 };
                 match fresh {
                     None => return tmp_gone(peer, &item, "gone", None),
@@ -1129,15 +1352,29 @@ fn tmp_read(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_trans
                         if f.get("destroyed").and_then(Value::as_bool).unwrap_or(false)
                             || f.get("expired").and_then(Value::as_bool).unwrap_or(false)
                         {
-                            return tmp_gone(peer, &f, f.get("destroy_reason").and_then(Value::as_str).unwrap_or("gone"), None);
+                            return tmp_gone(
+                                peer,
+                                &f,
+                                f.get("destroy_reason")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("gone"),
+                                None,
+                            );
                         }
-                        let freaders: Vec<Value> = f.get("readers").and_then(Value::as_array).cloned().unwrap_or_default();
+                        let freaders: Vec<Value> = f
+                            .get("readers")
+                            .and_then(Value::as_array)
+                            .cloned()
+                            .unwrap_or_default();
                         if freaders.iter().any(|r| r.as_str() == Some(peer)) {
                             repeat = true;
                             reads_count = f.get("reads_count").and_then(Value::as_i64).unwrap_or(0);
                             reads_max = f.get("reads_max").and_then(Value::as_i64).unwrap_or(0);
                         } else {
-                            return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": "并发读冲突，请重试"})));
+                            return Ok(Reply::json(
+                                503,
+                                json!({"ok": false, "error": "db_unavailable", "detail": "并发读冲突，请重试"}),
+                            ));
                         }
                     }
                 }
@@ -1149,67 +1386,116 @@ fn tmp_read(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_trans
             }
         }
     }
-    Ok(Reply::json(200, json!({
-        "ok": true, "tmp_id": tmp_id, "title": item.get("title"),
-        "body": body, "bytes": item.get("bytes"),
-        "reads_count": reads_count, "reads_max": reads_max,
-        "reads_left": (reads_max - reads_count).max(0),
-        "repeat": repeat, "destroyed": destroyed,
-        "destroy_reason": if destroyed { json!("read_quota") } else { Value::Null },
-        "expires_at": item.get("expires_at"),
-    })))
+    Ok(Reply::json(
+        200,
+        json!({
+            "ok": true, "tmp_id": tmp_id, "title": item.get("title"),
+            "body": body, "bytes": item.get("bytes"),
+            "reads_count": reads_count, "reads_max": reads_max,
+            "reads_left": (reads_max - reads_count).max(0),
+            "repeat": repeat, "destroyed": destroyed,
+            "destroy_reason": if destroyed { json!("read_quota") } else { Value::Null },
+            "expires_at": item.get("expires_at"),
+        }),
+    ))
 }
 
-fn tmp_gone(peer: &str, item: &Value, reason: &str, destroyed_at: Option<String>) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
-    Ok(Reply::json(410, json!({
-        "ok": false, "error": "gone", "tmp_id": item.get("tmp_id"),
-        "destroy_reason": reason,
-        "destroyed_at": destroyed_at.clone().unwrap_or_default(),
-    })))
-    .inspect(|_| { let _ = peer; })
+fn tmp_gone(
+    peer: &str,
+    item: &Value,
+    reason: &str,
+    destroyed_at: Option<String>,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+    Ok(Reply::json(
+        410,
+        json!({
+            "ok": false, "error": "gone", "tmp_id": item.get("tmp_id"),
+            "destroy_reason": reason,
+            "destroyed_at": destroyed_at.clone().unwrap_or_default(),
+        }),
+    ))
+    .inspect(|_| {
+        let _ = peer;
+    })
 }
 
-fn tmp_delete(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn tmp_delete(
+    rt: &BbSvc,
+    peer: &str,
+    raw_id: &str,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let tmp_id = urldecode(raw_id);
     if !bb::tmp_id_ok(&tmp_id) {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"}),
+        ));
     }
     let item = match rt.select_tmp(&tmp_id) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let Some(item) = item else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条临时共享"}),
+        ));
     };
     if item.get("owner").and_then(Value::as_str) != Some(peer) {
         println!("非 owner 试图销毁 tmp_id={} from={}", tmp_id, peer);
-        return Ok(Reply::json(403, json!({"ok": false, "error": "forbidden", "detail": "只有写入者能销毁这条临时共享"})));
+        return Ok(Reply::json(
+            403,
+            json!({"ok": false, "error": "forbidden", "detail": "只有写入者能销毁这条临时共享"}),
+        ));
     }
-    if item.get("destroyed").and_then(Value::as_bool).unwrap_or(false) {
-        return Ok(Reply::json(200, json!({
-            "ok": true, "tmp_id": tmp_id,
-            "destroyed_at": item.get("destroyed_at"),
-            "destroy_reason": item.get("destroy_reason"),
-        })));
+    if item
+        .get("destroyed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(Reply::json(
+            200,
+            json!({
+                "ok": true, "tmp_id": tmp_id,
+                "destroyed_at": item.get("destroyed_at"),
+                "destroy_reason": item.get("destroy_reason"),
+            }),
+        ));
     }
     let destroyed_at = match rt.tmp_destroy_by_owner(&tmp_id) {
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
         Ok(Some(ts)) => ts,
         Ok(None) => {
             let fresh = rt.select_tmp(&tmp_id).unwrap_or(None);
             match fresh {
                 Some(f) => {
-                    return Ok(Reply::json(200, json!({
-                        "ok": true, "tmp_id": tmp_id,
-                        "destroyed_at": f.get("destroyed_at"),
-                        "destroy_reason": f.get("destroy_reason"),
-                    })));
+                    return Ok(Reply::json(
+                        200,
+                        json!({
+                            "ok": true, "tmp_id": tmp_id,
+                            "destroyed_at": f.get("destroyed_at"),
+                            "destroy_reason": f.get("destroy_reason"),
+                        }),
+                    ));
                 }
                 None => bb::iso_z(bb::now_micros()),
             }
         }
     };
-    Ok(Reply::json(200, json!({"ok": true, "tmp_id": tmp_id, "destroyed_at": destroyed_at, "destroy_reason": "owner"})))
+    Ok(Reply::json(
+        200,
+        json!({"ok": true, "tmp_id": tmp_id, "destroyed_at": destroyed_at, "destroy_reason": "owner"}),
+    ))
 }
 
 /// GET /actions | /issues | /tracking 的共用分派。
@@ -1295,7 +1581,11 @@ fn parse_since(raw: &str) -> Result<Option<String>, ApiError> {
         }
         return Err(ApiError::new(400, "bad_request").detail("since 不是合法时间"));
     }
-    if raw.len() > 64 || !raw.bytes().all(|c| c.is_ascii_digit() || b"TZ:-+. ".contains(&c)) {
+    if raw.len() > 64
+        || !raw
+            .bytes()
+            .all(|c| c.is_ascii_digit() || b"TZ:-+. ".contains(&c))
+    {
         return Err(ApiError::new(400, "bad_request").detail("since 不是合法时间"));
     }
     Ok(Some(raw.to_string()))
@@ -1330,12 +1620,21 @@ fn parse_owner(raw: &str, field: &str) -> Result<Option<String>, ApiError> {
         return Ok(None);
     }
     if v.len() > bb::OWNER_MAX {
-        return Err(ApiError::new(400, "bad_request").detail(format!("{} 超过 {} 字符", field, bb::OWNER_MAX)));
+        return Err(ApiError::new(400, "bad_request").detail(format!(
+            "{} 超过 {} 字符",
+            field,
+            bb::OWNER_MAX
+        )));
     }
     Ok(Some(v.to_string()))
 }
 
-fn norm_text(value: Option<&Value>, field: &str, required: bool, default: &str) -> Result<String, ApiError> {
+fn norm_text(
+    value: Option<&Value>,
+    field: &str,
+    required: bool,
+    default: &str,
+) -> Result<String, ApiError> {
     match value {
         None | Some(Value::Null) => {
             if required {
@@ -1348,12 +1647,18 @@ fn norm_text(value: Option<&Value>, field: &str, required: bool, default: &str) 
             let v = s.trim();
             if v.is_empty() {
                 if required {
-                    return Err(ApiError::new(400, "bad_request").detail(format!("{} 不能为空", field)));
+                    return Err(
+                        ApiError::new(400, "bad_request").detail(format!("{} 不能为空", field))
+                    );
                 }
                 return Ok(default.to_string());
             }
             if v.chars().count() > bb::TEXT_FIELD_MAX {
-                return Err(ApiError::new(400, "bad_request").detail(format!("{} 超过 {} 字符", field, bb::TEXT_FIELD_MAX)));
+                return Err(ApiError::new(400, "bad_request").detail(format!(
+                    "{} 超过 {} 字符",
+                    field,
+                    bb::TEXT_FIELD_MAX
+                )));
             }
             Ok(v.to_string())
         }
@@ -1361,13 +1666,26 @@ fn norm_text(value: Option<&Value>, field: &str, required: bool, default: &str) 
     }
 }
 
-fn tracking_route(rt: &BbSvc, req: &hacs_l1_transport::web_gateway::Request, kind: &str) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn tracking_route(
+    rt: &BbSvc,
+    req: &hacs_l1_transport::web_gateway::Request,
+    kind: &str,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let _peer = match auth_peer(req.header("Authorization"), &rt.peer_map, false) {
         Some(p) => p,
-        None => return Ok(Reply::json(401, json!({"ok": false, "error": "unauthorized"}))),
+        None => {
+            return Ok(Reply::json(
+                401,
+                json!({"ok": false, "error": "unauthorized"}),
+            ))
+        }
     };
     let status = if kind != "tracking" {
-        let allowed: &[&str] = if kind == "actions" { &bb::ACTION_STATUSES } else { &bb::ISSUE_STATUSES };
+        let allowed: &[&str] = if kind == "actions" {
+            &bb::ACTION_STATUSES
+        } else {
+            &bb::ISSUE_STATUSES
+        };
         match parse_status(&one(&req.query, "status"), allowed, "status") {
             Ok(v) => v,
             Err(e) => return Ok(Reply::json(e.status, e.body())),
@@ -1391,7 +1709,11 @@ fn tracking_route(rt: &BbSvc, req: &hacs_l1_transport::web_gateway::Request, kin
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
-    let limit = match clamp_limit(&one(&req.query, "limit"), bb::TRACK_DEFAULT_LIMIT, bb::TRACK_MAX_LIMIT) {
+    let limit = match clamp_limit(
+        &one(&req.query, "limit"),
+        bb::TRACK_DEFAULT_LIMIT,
+        bb::TRACK_MAX_LIMIT,
+    ) {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
@@ -1399,27 +1721,63 @@ fn tracking_route(rt: &BbSvc, req: &hacs_l1_transport::web_gateway::Request, kin
     let now_iso = bb::iso_utc_now();
     let mut degraded = degraded;
     if kind == "tracking" {
-        let (actions, issues, counts) = rt.select_tracking(owner.as_deref(), overdue, limit, &mut degraded);
-        Ok(Reply::json(200, json!({"ok": true, "actions": actions, "issues": issues, "counts": counts, "degraded": degraded, "now": now_iso, "tz": "UTC"})))
+        let (actions, issues, counts) =
+            rt.select_tracking(owner.as_deref(), overdue, limit, &mut degraded);
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "actions": actions, "issues": issues, "counts": counts, "degraded": degraded, "now": now_iso, "tz": "UTC"}),
+        ))
     } else {
         let rows = if kind == "actions" {
-            rt.select_actions(status.as_deref(), owner.as_deref(), overdue, limit, &mut degraded)
+            rt.select_actions(
+                status.as_deref(),
+                owner.as_deref(),
+                overdue,
+                limit,
+                &mut degraded,
+            )
         } else {
-            rt.select_issues(status.as_deref(), owner.as_deref(), overdue, limit, issue_kind.as_deref(), &mut degraded)
+            rt.select_issues(
+                status.as_deref(),
+                owner.as_deref(),
+                overdue,
+                limit,
+                issue_kind.as_deref(),
+                &mut degraded,
+            )
         };
-        let key = if kind == "actions" { "actions" } else { "issues" };
-        Ok(Reply::json(200, json!({"ok": true, "count": rows.len(), key: rows, "degraded": degraded, "now": now_iso, "tz": "UTC"})))
+        let key = if kind == "actions" {
+            "actions"
+        } else {
+            "issues"
+        };
+        Ok(Reply::json(
+            200,
+            json!({"ok": true, "count": rows.len(), key: rows, "degraded": degraded, "now": now_iso, "tz": "UTC"}),
+        ))
     }
 }
 
 /// GET /api/shared[/tasks|/search|/<id>] 与 /shared[...] 的共用分派。
-fn shared_route(rt: &BbSvc, req: &hacs_l1_transport::web_gateway::Request) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn shared_route(
+    rt: &BbSvc,
+    req: &hacs_l1_transport::web_gateway::Request,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let peer = match auth_peer(req.header("Authorization"), &rt.peer_map, false) {
         Some(p) => p,
-        None => return Ok(Reply::json(401, json!({"ok": false, "error": "unauthorized"}))),
+        None => {
+            return Ok(Reply::json(
+                401,
+                json!({"ok": false, "error": "unauthorized"}),
+            ))
+        }
     };
     let parts: Vec<&str> = req.path.trim_matches('/').split('/').collect();
-    let rest: Vec<&str> = if parts[0] == "api" { parts[2..].to_vec() } else { parts[1..].to_vec() };
+    let rest: Vec<&str> = if parts[0] == "api" {
+        parts[2..].to_vec()
+    } else {
+        parts[1..].to_vec()
+    };
     if rest.is_empty() {
         shared_list(rt, &peer, req, false)
     } else if rest == ["tasks"] {
@@ -1435,8 +1793,13 @@ fn shared_route(rt: &BbSvc, req: &hacs_l1_transport::web_gateway::Request) -> Re
 
 fn shared_filters(
     peer: &str,
-    scope: Option<&str>, kind: Option<&str>, owner: Option<&str>,
-    tag: Option<&str>, task_id: Option<&str>, status: Option<&str>, expired: bool,
+    scope: Option<&str>,
+    kind: Option<&str>,
+    owner: Option<&str>,
+    tag: Option<&str>,
+    task_id: Option<&str>,
+    status: Option<&str>,
+    expired: bool,
 ) -> (Vec<String>, Vec<Box<dyn postgres::types::ToSql + Sync>>) {
     let mut where_parts: Vec<String> = vec![];
     let mut params: Vec<Box<dyn postgres::types::ToSql + Sync>> = vec![];
@@ -1445,36 +1808,89 @@ fn shared_filters(
         // 占位：真正的编号在调用处拼（闭包里拿不到 len）；改为在下面统一编号
         let _ = cond;
     };
-    let add = |val: Box<dyn postgres::types::ToSql + Sync>, cond: &dyn Fn(usize) -> String, params: &mut Vec<Box<dyn postgres::types::ToSql + Sync>>, parts: &mut Vec<String>| {
+    let add = |val: Box<dyn postgres::types::ToSql + Sync>,
+               cond: &dyn Fn(usize) -> String,
+               params: &mut Vec<Box<dyn postgres::types::ToSql + Sync>>,
+               parts: &mut Vec<String>| {
         params.push(val);
         parts.push(cond(params.len()));
     };
     if let Some(v) = scope {
-        add(Box::new(v.to_string()), &|n| format!("scope = ${}", n), &mut params, &mut where_parts);
+        add(
+            Box::new(v.to_string()),
+            &|n| format!("scope = ${}", n),
+            &mut params,
+            &mut where_parts,
+        );
     }
     if let Some(v) = kind {
-        add(Box::new(v.to_string()), &|n| format!("kind = ${}", n), &mut params, &mut where_parts);
+        add(
+            Box::new(v.to_string()),
+            &|n| format!("kind = ${}", n),
+            &mut params,
+            &mut where_parts,
+        );
     }
     if let Some(v) = owner {
-        add(Box::new(v.to_string()), &|n| format!("owner = ${}", n), &mut params, &mut where_parts);
+        add(
+            Box::new(v.to_string()),
+            &|n| format!("owner = ${}", n),
+            &mut params,
+            &mut where_parts,
+        );
     }
     if let Some(v) = task_id {
-        add(Box::new(v.to_string()), &|n| format!("task_id = ${}", n), &mut params, &mut where_parts);
+        add(
+            Box::new(v.to_string()),
+            &|n| format!("task_id = ${}", n),
+            &mut params,
+            &mut where_parts,
+        );
     }
     if let Some(v) = tag {
         let tags = json!([v]);
-        add(Box::new(tags.to_string()), &|n| format!("tags @> ${}::jsonb", n), &mut params, &mut where_parts);
+        add(
+            Box::new(tags.to_string()),
+            &|n| format!("tags @> ${}::jsonb", n),
+            &mut params,
+            &mut where_parts,
+        );
     }
     if let Some(v) = status {
-        add(Box::new(v.to_string()), &|n| format!("status = ${}", n), &mut params, &mut where_parts);
+        add(
+            Box::new(v.to_string()),
+            &|n| format!("status = ${}", n),
+            &mut params,
+            &mut where_parts,
+        );
     } else {
         for st in bb::SHARED_HIDDEN_STATUSES {
-            add(Box::new(st.to_string()), &|n| format!("status <> ${}", n), &mut params, &mut where_parts);
+            add(
+                Box::new(st.to_string()),
+                &|n| format!("status <> ${}", n),
+                &mut params,
+                &mut where_parts,
+            );
         }
         if !expired {
-            add(Box::new("expired".to_string()), &|n| format!("status <> ${}", n), &mut params, &mut where_parts);
+            add(
+                Box::new("expired".to_string()),
+                &|n| format!("status <> ${}", n),
+                &mut params,
+                &mut where_parts,
+            );
             let now_iso = bb::iso_utc_now();
-            add(Box::new(now_iso), &|n| format!("(expires_at IS NULL OR expires_at >= ${}::text::timestamptz)", n), &mut params, &mut where_parts);
+            add(
+                Box::new(now_iso),
+                &|n| {
+                    format!(
+                        "(expires_at IS NULL OR expires_at >= ${}::text::timestamptz)",
+                        n
+                    )
+                },
+                &mut params,
+                &mut where_parts,
+            );
         }
     }
     // audience：all 或点名请求者（jsonb @>，吃 GIN 索引）
@@ -1484,12 +1900,20 @@ fn shared_filters(
     let n1 = params.len();
     params.push(Box::new(me));
     let n2 = params.len();
-    where_parts.push(format!("(audience @> ${}::jsonb OR audience @> ${}::jsonb)", n1, n2));
+    where_parts.push(format!(
+        "(audience @> ${}::jsonb OR audience @> ${}::jsonb)",
+        n1, n2
+    ));
     let _ = push;
     (where_parts, params)
 }
 
-fn shared_list(rt: &BbSvc, peer: &str, req: &hacs_l1_transport::web_gateway::Request, search: bool) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn shared_list(
+    rt: &BbSvc,
+    peer: &str,
+    req: &hacs_l1_transport::web_gateway::Request,
+    search: bool,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let scope = match parse_status(&one(&req.query, "scope"), &bb::SHARED_SCOPES, "scope") {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
@@ -1524,16 +1948,35 @@ fn shared_list(rt: &BbSvc, peer: &str, req: &hacs_l1_transport::web_gateway::Req
     };
     let q = one(&req.query, "q");
     if search && q.is_empty() {
-        return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": "q 不能为空"})));
+        return Ok(Reply::json(
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "q 不能为空"}),
+        ));
     }
     if q.chars().count() > bb::SEARCH_QUERY_MAX {
-        return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request", "detail": format!("q 超过 {} 字符", bb::SEARCH_QUERY_MAX)})));
+        return Ok(Reply::json(
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": format!("q 超过 {} 字符", bb::SEARCH_QUERY_MAX)}),
+        ));
     }
-    let limit = match clamp_limit(&one(&req.query, "limit"), bb::SHARED_DEFAULT_LIMIT, bb::SHARED_MAX_LIMIT) {
+    let limit = match clamp_limit(
+        &one(&req.query, "limit"),
+        bb::SHARED_DEFAULT_LIMIT,
+        bb::SHARED_MAX_LIMIT,
+    ) {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
-    let (where_parts, params) = shared_filters(peer, scope.as_deref(), kind.as_deref(), owner.as_deref(), tag.as_deref(), task_id.as_deref(), status.as_deref(), expired);
+    let (where_parts, params) = shared_filters(
+        peer,
+        scope.as_deref(),
+        kind.as_deref(),
+        owner.as_deref(),
+        tag.as_deref(),
+        task_id.as_deref(),
+        status.as_deref(),
+        expired,
+    );
     let mut degraded: Vec<String> = vec![];
     let now_iso = bb::iso_utc_now();
     let used;
@@ -1541,61 +1984,127 @@ fn shared_list(rt: &BbSvc, peer: &str, req: &hacs_l1_transport::web_gateway::Req
         used = "list";
         match rt.select_shared(&where_parts, params, limit, &mut degraded) {
             Ok(v) => v,
-            Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+            Err(e) => {
+                return Ok(Reply::json(
+                    503,
+                    json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+                ))
+            }
         }
     } else {
         // 嵌入不可用 → 关键词检索（mode 如实报 keyword）
         used = "keyword";
         match rt.search_shared_keyword(&q, &where_parts, params, limit, &mut degraded) {
             Ok(v) => v,
-            Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+            Err(e) => {
+                return Ok(Reply::json(
+                    503,
+                    json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+                ))
+            }
         }
     };
-    Ok(Reply::json(200, json!({"ok": true, "count": items.len(), "shared": items, "mode": used, "query": if q.is_empty() { Value::Null } else { json!(q) }, "degraded": degraded, "now": now_iso, "tz": "UTC"})))
+    Ok(Reply::json(
+        200,
+        json!({"ok": true, "count": items.len(), "shared": items, "mode": used, "query": if q.is_empty() { Value::Null } else { json!(q) }, "degraded": degraded, "now": now_iso, "tz": "UTC"}),
+    ))
 }
 
-fn shared_detail(rt: &BbSvc, peer: &str, raw_id: &str) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn shared_detail(
+    rt: &BbSvc,
+    peer: &str,
+    raw_id: &str,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let raw_id = urldecode(raw_id).trim().to_string();
     if raw_id.is_empty() || !raw_id.bytes().all(|b| b.is_ascii_digit()) || raw_id.len() > 19 {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条共享内容"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条共享内容"}),
+        ));
     }
     let content_id: i64 = raw_id.parse().unwrap_or(0);
     let mut degraded: Vec<String> = vec![];
     let item = match rt.select_shared_one(content_id, &mut degraded) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
     let Some(item) = item else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "not_found", "detail": "没有这条共享内容"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "not_found", "detail": "没有这条共享内容"}),
+        ));
     };
-    let audience: Vec<Value> = item.get("audience").and_then(Value::as_array).cloned().unwrap_or_default();
-    let visible = audience.iter().any(|a| {
-        a.as_str() == Some(bb::SHARED_ALL_AUDIENCE) || a.as_str() == Some(peer)
-    });
+    let audience: Vec<Value> = item
+        .get("audience")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let visible = audience
+        .iter()
+        .any(|a| a.as_str() == Some(bb::SHARED_ALL_AUDIENCE) || a.as_str() == Some(peer));
     if !visible {
-        println!("受众不含请求者，拒绝 content_id={} from={}", content_id, peer);
-        return Ok(Reply::json(403, json!({"ok": false, "error": "forbidden", "detail": "这条共享内容没有共享给你"})));
+        println!(
+            "受众不含请求者，拒绝 content_id={} from={}",
+            content_id, peer
+        );
+        return Ok(Reply::json(
+            403,
+            json!({"ok": false, "error": "forbidden", "detail": "这条共享内容没有共享给你"}),
+        ));
     }
     let revisions = match rt.select_shared_revisions(content_id, &mut degraded) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
-    Ok(Reply::json(200, json!({"ok": true, "shared": item, "revisions": revisions, "degraded": degraded, "now": bb::iso_utc_now(), "tz": "UTC"})))
+    Ok(Reply::json(
+        200,
+        json!({"ok": true, "shared": item, "revisions": revisions, "degraded": degraded, "now": bb::iso_utc_now(), "tz": "UTC"}),
+    ))
 }
 
-fn shared_tasks(rt: &BbSvc, _peer: &str, req: &hacs_l1_transport::web_gateway::Request) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
-    let status = match parse_status(&one(&req.query, "status"), &bb::SHARED_TASK_STATUSES, "status") {
+fn shared_tasks(
+    rt: &BbSvc,
+    _peer: &str,
+    req: &hacs_l1_transport::web_gateway::Request,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+    let status = match parse_status(
+        &one(&req.query, "status"),
+        &bb::SHARED_TASK_STATUSES,
+        "status",
+    ) {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
-    let limit = match clamp_limit(&one(&req.query, "limit"), bb::SHARED_DEFAULT_LIMIT, bb::SHARED_MAX_LIMIT) {
+    let limit = match clamp_limit(
+        &one(&req.query, "limit"),
+        bb::SHARED_DEFAULT_LIMIT,
+        bb::SHARED_MAX_LIMIT,
+    ) {
         Ok(v) => v,
         Err(e) => return Ok(Reply::json(e.status, e.body())),
     };
     let mut degraded: Vec<String> = vec![];
     let tasks = match rt.select_shared_tasks(status.as_deref(), limit, &mut degraded) {
         Ok(v) => v,
-        Err(e) => return Ok(Reply::json(503, json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}))),
+        Err(e) => {
+            return Ok(Reply::json(
+                503,
+                json!({"ok": false, "error": "db_unavailable", "detail": bb::safe_err(&e.0)}),
+            ))
+        }
     };
-    Ok(Reply::json(200, json!({"ok": true, "count": tasks.len(), "tasks": tasks, "degraded": degraded, "now": bb::iso_utc_now(), "tz": "UTC"})))
+    Ok(Reply::json(
+        200,
+        json!({"ok": true, "count": tasks.len(), "tasks": tasks, "degraded": degraded, "now": bb::iso_utc_now(), "tz": "UTC"}),
+    ))
 }

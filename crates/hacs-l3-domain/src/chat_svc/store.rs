@@ -11,9 +11,7 @@ use postgres::{Client, NoTls, Row};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use super::classify::{
-    todo_dedupe_key, todo_task_name, TODO_INTENTS,
-};
+use super::classify::{todo_dedupe_key, todo_task_name, TODO_INTENTS};
 use super::iso_bj;
 use super::{gen_message_id, gen_skip_id, gen_todo_id, memo_etag, memo_etag_ok, RequestError};
 
@@ -34,8 +32,8 @@ pub fn resolve_dsn() -> String {
             }
         }
     }
-    let path = std::path::Path::new(&std::env::var("HOME").unwrap_or_default())
-        .join(".chat_pg_dsn");
+    let path =
+        std::path::Path::new(&std::env::var("HOME").unwrap_or_default()).join(".chat_pg_dsn");
     if let Ok(v) = std::fs::read_to_string(&path) {
         return v.trim().to_string();
     }
@@ -44,9 +42,8 @@ pub fn resolve_dsn() -> String {
 
 impl ChatStore {
     pub fn connect(dsn: &str) -> Result<Self, DbUnavailable> {
-        let client = Client::connect(dsn, NoTls).map_err(|e| {
-            DbUnavailable(format!("连接数据库失败：{}", scrub(&e.to_string())))
-        })?;
+        let client = Client::connect(dsn, NoTls)
+            .map_err(|e| DbUnavailable(format!("连接数据库失败：{}", scrub(&e.to_string()))))?;
         Ok(ChatStore {
             client: Mutex::new(Some(client)),
             last_failed: Mutex::new(None),
@@ -100,9 +97,20 @@ impl ChatStore {
     }
 
     /// 只读查询（postgres crate autocommit，无需显式 rollback）。
-    pub fn query(&self, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]) -> Result<Vec<Row>, DbUnavailable> {
+    pub fn query(
+        &self,
+        sql: &str,
+        params: &[&(dyn postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<Row>, DbUnavailable> {
         self.with_client(|c| {
-            let rows = c.query(sql, params).map_err(|e| format!("{:?} :: {} :: {}", e.as_db_error().map(|d| (d.code(), d.message())), e, e))?;
+            let rows = c.query(sql, params).map_err(|e| {
+                format!(
+                    "{:?} :: {} :: {}",
+                    e.as_db_error().map(|d| (d.code(), d.message())),
+                    e,
+                    e
+                )
+            })?;
 
             Ok(rows)
         })
@@ -230,10 +238,13 @@ impl ChatStore {
         let kind: String = row.get(1);
         let title: String = row.get::<_, Option<String>>(2).unwrap_or_default();
         let sensitivity: String = row.get(3);
-        let members_val: serde_json::Value = row.get::<_, postgres::types::Json<serde_json::Value>>(4).0;
+        let members_val: serde_json::Value =
+            row.get::<_, postgres::types::Json<serde_json::Value>>(4).0;
         let created_by: String = row.get(5);
-        let created_at: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(6);
-        let updated_at: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(7);
+        let created_at: Option<std::time::SystemTime> =
+            row.get::<_, Option<std::time::SystemTime>>(6);
+        let updated_at: Option<std::time::SystemTime> =
+            row.get::<_, Option<std::time::SystemTime>>(7);
         let state: String = row.get(8);
         let ref_table: Option<String> = row.get::<_, Option<String>>(9);
         let ref_id: Option<String> = row.get::<_, Option<String>>(10);
@@ -285,14 +296,23 @@ impl ChatStore {
                     continue;
                 }
             }
-            let members_val: serde_json::Value = row.get::<_, postgres::types::Json<serde_json::Value>>(4).0;
+            let members_val: serde_json::Value =
+                row.get::<_, postgres::types::Json<serde_json::Value>>(4).0;
             if let Some(mf) = member {
-                let ids: Vec<String> = members_val.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+                let ids: Vec<String> = members_val
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 if !ids.iter().any(|m| m == mf) {
                     continue;
                 }
             }
-            let updated: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(7);
+            let updated: Option<std::time::SystemTime> =
+                row.get::<_, Option<std::time::SystemTime>>(7);
             let up_iso = updated.map(|t| iso_epoch(&t)).unwrap_or_default();
             if let Some(cf) = cursor {
                 if up_iso.as_str() >= cf {
@@ -307,7 +327,11 @@ impl ChatStore {
         Ok(out)
     }
 
-    pub fn set_session_state(&self, session_id: &str, state: &str) -> Result<Option<Row>, DbUnavailable> {
+    pub fn set_session_state(
+        &self,
+        session_id: &str,
+        state: &str,
+    ) -> Result<Option<Row>, DbUnavailable> {
         let rows = self.query(
             "UPDATE chat_sessions SET state = $1, updated_at = now() WHERE session_id = $2 RETURNING session_id, kind, title, sensitivity, members, created_by, created_at, updated_at, state, ref_table, ref_id, note",
             &[&state, &session_id],
@@ -350,7 +374,10 @@ impl ChatStore {
                 &[&session_id, field, ov, nv, &actor],
             );
         }
-        Ok(rows.into_iter().next().map(|r| (r, events.iter().map(|e| e.0.clone()).collect())))
+        Ok(rows
+            .into_iter()
+            .next()
+            .map(|r| (r, events.iter().map(|e| e.0.clone()).collect())))
     }
 
     pub fn members_write(
@@ -364,9 +391,14 @@ impl ChatStore {
             Some(r) => self.session_json(&r).map_err(db_err)?,
             None => return Err(RequestError::new(404, "not_found", "会话不存在")),
         };
-        let old_ids: Vec<String> = old["member_ids"].as_array().map(|a| {
-            a.iter().filter_map(|v| v.as_str().map(String::from)).collect()
-        }).unwrap_or_default();
+        let old_ids: Vec<String> = old["member_ids"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut new_ids: Vec<String> = old_ids
             .iter()
             .filter(|m| !remove.contains(m))
@@ -377,10 +409,20 @@ impl ChatStore {
                 new_ids.push(a.clone());
             }
         }
-        let changed: Vec<String> = new_ids.iter().filter(|m| !old_ids.contains(m)).cloned().collect();
-        let left: Vec<String> = old_ids.iter().filter(|m| !new_ids.contains(m)).cloned().collect();
+        let changed: Vec<String> = new_ids
+            .iter()
+            .filter(|m| !old_ids.contains(m))
+            .cloned()
+            .collect();
+        let left: Vec<String> = old_ids
+            .iter()
+            .filter(|m| !new_ids.contains(m))
+            .cloned()
+            .collect();
         if changed.is_empty() && left.is_empty() {
-            return Ok(serde_json::json!({"session": old, "added": [], "removed": [], "voided": 0, "cleared_todos": 0}));
+            return Ok(
+                serde_json::json!({"session": old, "added": [], "removed": [], "voided": 0, "cleared_todos": 0}),
+            );
         }
         // 踢人结清其名下未结待办
         let mut cleared = 0i64;
@@ -409,7 +451,11 @@ impl ChatStore {
             )
             .map_err(db_err)?;
         if rows.is_empty() {
-            return Err(RequestError::new(409, "members_conflict", "成员表刚被其他人改过，请刷新后重试"));
+            return Err(RequestError::new(
+                409,
+                "members_conflict",
+                "成员表刚被其他人改过，请刷新后重试",
+            ));
         }
         // voided 只读统计
         let voided: i64 = self
@@ -460,7 +506,8 @@ impl ChatStore {
     }
 
     pub fn message_json(row: &Row) -> serde_json::Value {
-        let created: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(10);
+        let created: Option<std::time::SystemTime> =
+            row.get::<_, Option<std::time::SystemTime>>(10);
         let meta: serde_json::Value = row.get(9);
         serde_json::json!({
             "message_id": row.get::<_, String>(0),
@@ -511,8 +558,7 @@ impl ChatStore {
                 rows = rows.split_off(rows.len() - limit as usize);
             }
         }
-        let messages: Vec<serde_json::Value> =
-            rows.iter().map(Self::message_json).collect();
+        let messages: Vec<serde_json::Value> = rows.iter().map(Self::message_json).collect();
         let next_before = if has_more && !messages.is_empty() {
             messages[0]["seq"].as_i64()
         } else {
@@ -536,7 +582,9 @@ impl ChatStore {
             &[&session_id],
         )?;
         if rows.is_empty() {
-            return Ok(serde_json::json!({"memo": {}, "version": 0, "etag": "", "updated_at": null, "updated_by": ""}));
+            return Ok(
+                serde_json::json!({"memo": {}, "version": 0, "etag": "", "updated_at": null, "updated_by": ""}),
+            );
         }
         let r = &rows[0];
         let doc: serde_json::Value = r.get(0);
@@ -590,22 +638,28 @@ impl ChatStore {
         if rows.is_empty() {
             return Ok((false, self.memo_get(session_id)?));
         }
-        let created: Option<std::time::SystemTime> = rows[0].get::<_, Option<std::time::SystemTime>>(2);
-        Ok((true, serde_json::json!({
-            "memo": doc, "version": new_version, "etag": etag,
-            "updated_at": created.map(|t| iso_epoch(&t)),
-            "updated_by": actor,
-        })))
+        let created: Option<std::time::SystemTime> =
+            rows[0].get::<_, Option<std::time::SystemTime>>(2);
+        Ok((
+            true,
+            serde_json::json!({
+                "memo": doc, "version": new_version, "etag": etag,
+                "updated_at": created.map(|t| iso_epoch(&t)),
+                "updated_by": actor,
+            }),
+        ))
     }
 
     // -- todos ----------------------------------------------------------
     const TODO_COLS: &'static str = "todo_id, session_id, text, owner, kind, status, deadline, created_by, created_at, updated_at, cleared_at, cleared_by, evidences, landing, intent, followup_count, task_name, task_summary, enrich_state";
 
     pub fn todo_row_json(&self, row: &Row) -> serde_json::Value {
-        let deadline: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(6);
+        let deadline: Option<std::time::SystemTime> =
+            row.get::<_, Option<std::time::SystemTime>>(6);
         let created: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(8);
         let updated: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(9);
-        let cleared: Option<std::time::SystemTime> = row.get::<_, Option<std::time::SystemTime>>(10);
+        let cleared: Option<std::time::SystemTime> =
+            row.get::<_, Option<std::time::SystemTime>>(10);
         let evid_val: serde_json::Value = row.get(12);
         let land_val: serde_json::Value = row.get(13);
         let owner: String = row.get(3);
@@ -649,8 +703,16 @@ impl ChatStore {
         Ok(rows
             .iter()
             .map(|r| self.todo_row_json(r))
-            .filter(|t| owner.map(|o| t["owner"] == serde_json::json!(o)).unwrap_or(true))
-            .filter(|t| status.map(|s| t["status"] == serde_json::json!(s)).unwrap_or(true))
+            .filter(|t| {
+                owner
+                    .map(|o| t["owner"] == serde_json::json!(o))
+                    .unwrap_or(true)
+            })
+            .filter(|t| {
+                status
+                    .map(|s| t["status"] == serde_json::json!(s))
+                    .unwrap_or(true)
+            })
             .collect())
     }
 
@@ -663,7 +725,11 @@ impl ChatStore {
         Ok(rows.first().map(|r| self.todo_row_json(r)))
     }
 
-    pub fn todos_rows(&self, session_id: &str, ids: &[String]) -> Result<Vec<serde_json::Value>, DbUnavailable> {
+    pub fn todos_rows(
+        &self,
+        session_id: &str,
+        ids: &[String],
+    ) -> Result<Vec<serde_json::Value>, DbUnavailable> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -689,8 +755,16 @@ impl ChatStore {
         task_name: &str,
         enrich_state: &str,
     ) -> Result<Option<serde_json::Value>, DbUnavailable> {
-        let name = if task_name.is_empty() { todo_task_name(text) } else { task_name.to_string() };
-        let intent = if TODO_INTENTS.contains(&intent) { intent } else { "task" };
+        let name = if task_name.is_empty() {
+            todo_task_name(text)
+        } else {
+            task_name.to_string()
+        };
+        let intent = if TODO_INTENTS.contains(&intent) {
+            intent
+        } else {
+            "task"
+        };
         let landing_val = serde_json::json!(landing);
         let name_cut: String = name.chars().take(super::TODO_TEXT_MAX).collect();
         let state_cut = enrich_state.chars().take(32).collect::<String>();
@@ -701,7 +775,19 @@ impl ChatStore {
         let todo_id = gen_todo_id();
         let rows = self.query(
             &sql,
-            &[&todo_id, &session_id, &text, &owner, &kind, &deadline, &actor, &landing_val, &intent, &name_cut, &state_cut],
+            &[
+                &todo_id,
+                &session_id,
+                &text,
+                &owner,
+                &kind,
+                &deadline,
+                &actor,
+                &landing_val,
+                &intent,
+                &name_cut,
+                &state_cut,
+            ],
         )?;
         Ok(rows.first().map(|r| self.todo_row_json(r)))
     }
@@ -723,7 +809,10 @@ impl ChatStore {
         Ok(rows.first().map(|r| self.todo_row_json(r)))
     }
 
-    pub fn todo_mark_doing(&self, todo_id: &str) -> Result<Option<serde_json::Value>, DbUnavailable> {
+    pub fn todo_mark_doing(
+        &self,
+        todo_id: &str,
+    ) -> Result<Option<serde_json::Value>, DbUnavailable> {
         let sql = format!(
             "UPDATE chat_session_todos SET status = 'doing', updated_at = now(), cleared_at = NULL, cleared_by = '' WHERE todo_id = $1 RETURNING {}",
             Self::TODO_COLS
@@ -821,7 +910,10 @@ impl ChatStore {
         Ok(rows.into_iter().next().map(|r| r.get(0)))
     }
 
-    pub fn todo_bump_followup(&self, todo_id: &str) -> Result<Option<serde_json::Value>, DbUnavailable> {
+    pub fn todo_bump_followup(
+        &self,
+        todo_id: &str,
+    ) -> Result<Option<serde_json::Value>, DbUnavailable> {
         let sql = format!(
             "UPDATE chat_session_todos SET followup_count = followup_count + 1, updated_at = now() WHERE todo_id = $1 RETURNING {}",
             Self::TODO_COLS
@@ -842,8 +934,10 @@ impl ChatStore {
         Ok(rows
             .iter()
             .map(|r| {
-                let created: Option<std::time::SystemTime> = r.get::<_, Option<std::time::SystemTime>>(10);
-                let hits_val: serde_json::Value = r.get::<_, postgres::types::Json<serde_json::Value>>(8).0;
+                let created: Option<std::time::SystemTime> =
+                    r.get::<_, Option<std::time::SystemTime>>(10);
+                let hits_val: serde_json::Value =
+                    r.get::<_, postgres::types::Json<serde_json::Value>>(8).0;
                 let owner: String = r.get(5);
                 serde_json::json!({
                     "id": r.get::<_, String>(0),
@@ -943,17 +1037,45 @@ mod tests {
         assert_eq!(session["member_ids"].as_array().unwrap().len(), 2);
         // 幂等（client_ref）
         let row2 = store
-            .create_session(&sid, "dm", "测试群", &members, "boss", "internal", Some("cr1"))
+            .create_session(
+                &sid,
+                "dm",
+                "测试群",
+                &members,
+                "boss",
+                "internal",
+                Some("cr1"),
+            )
             .unwrap();
         assert!(row2.is_some());
         // 发消息
         let m = store
-            .add_message(&sid, "human", "boss", "你好", &["@all".to_string()], &members, &["hermes".to_string()], None, None)
+            .add_message(
+                &sid,
+                "human",
+                "boss",
+                "你好",
+                &["@all".to_string()],
+                &members,
+                &["hermes".to_string()],
+                None,
+                None,
+            )
             .unwrap()
             .unwrap();
         assert_eq!(m.get::<_, i64>(2), 1);
         let m2 = store
-            .add_message(&sid, "agent", "hermes", "收到", &["@all".to_string()], &members, &["boss".to_string()], None, None)
+            .add_message(
+                &sid,
+                "agent",
+                "hermes",
+                "收到",
+                &["@all".to_string()],
+                &members,
+                &["boss".to_string()],
+                None,
+                None,
+            )
             .unwrap()
             .unwrap();
         assert_eq!(m2.get::<_, i64>(2), 2);
@@ -967,34 +1089,89 @@ mod tests {
         assert!(ok);
         assert_eq!(st["version"], serde_json::json!(1));
         // 过期 etag 不放行；当前 etag 重写正常 +1
-        let (ok2b, _) = store.memo_write(&sid, &doc, "boss", st["etag"].as_str().unwrap(), "put").unwrap();
+        let (ok2b, _) = store
+            .memo_write(&sid, &doc, "boss", st["etag"].as_str().unwrap(), "put")
+            .unwrap();
         assert!(ok2b);
-        let (ok2, cur) = store.memo_write(&sid, &doc, "boss", "W/\"00000000000000000000000000000000\"", "put").unwrap();
+        let (ok2, cur) = store
+            .memo_write(
+                &sid,
+                &doc,
+                "boss",
+                "W/\"00000000000000000000000000000000\"",
+                "put",
+            )
+            .unwrap();
         assert!(!ok2);
         assert_eq!(cur["version"], serde_json::json!(2));
         // todo
         let t = store
-            .todo_create(&sid, "#1 修复登录页", "hermes", "confirm", None, "boss", &[], "task", "", "")
+            .todo_create(
+                &sid,
+                "#1 修复登录页",
+                "hermes",
+                "confirm",
+                None,
+                "boss",
+                &[],
+                "task",
+                "",
+                "",
+            )
             .unwrap()
             .unwrap();
         assert_eq!(t["status"], serde_json::json!("open"));
         assert!(!t["task_name"].as_str().unwrap().is_empty());
         // 幂等清账
         let ids = vec![t["id"].as_str().unwrap().to_string()];
-        let (cleared, skipped) = store.todos_clear(&sid, &ids, "hermes", vec!["abc1234".to_string()].as_slice(), &[]).unwrap();
+        let (cleared, skipped) = store
+            .todos_clear(
+                &sid,
+                &ids,
+                "hermes",
+                vec!["abc1234".to_string()].as_slice(),
+                &[],
+            )
+            .unwrap();
         assert_eq!(cleared.len(), 1);
         let (_, skipped2) = store.todos_clear(&sid, &ids, "hermes", &[], &[]).unwrap();
         assert_eq!(skipped2[0]["why"], serde_json::json!("already_done"));
         let _ = skipped;
         // skip 台账幂等
-        let k1 = store.todo_skip_create(&sid, Some(1), "m1", "boss", "hermes", "followup", "followup_phrase", &["进度".to_string()], "进度如何").unwrap();
-        let k2 = store.todo_skip_create(&sid, Some(1), "m1", "boss", "hermes", "followup", "followup_phrase", &["进度".to_string()], "进度如何").unwrap();
+        let k1 = store
+            .todo_skip_create(
+                &sid,
+                Some(1),
+                "m1",
+                "boss",
+                "hermes",
+                "followup",
+                "followup_phrase",
+                &["进度".to_string()],
+                "进度如何",
+            )
+            .unwrap();
+        let k2 = store
+            .todo_skip_create(
+                &sid,
+                Some(1),
+                "m1",
+                "boss",
+                "hermes",
+                "followup",
+                "followup_phrase",
+                &["进度".to_string()],
+                "进度如何",
+            )
+            .unwrap();
         assert!(k1.is_some() && k2.is_none());
         // purge
         let removed = store.todos_purge(&sid).unwrap();
         assert_eq!(removed.len(), 1);
         // 踢人
-        let out = store.members_write(&sid, &[], &["hermes".to_string()], "boss").unwrap();
+        let out = store
+            .members_write(&sid, &[], &["hermes".to_string()], "boss")
+            .unwrap();
         assert_eq!(out["removed"].as_array().unwrap().len(), 1);
     }
 }

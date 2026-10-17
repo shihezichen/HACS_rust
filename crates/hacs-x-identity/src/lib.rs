@@ -7,15 +7,15 @@
 //! | 模块 | 对应 Python | 职责 |
 //! |---|---|---|
 //! | [`redact`] | `view_auth.safe_err` | 错误文本脱敏（抹 DSN 口令再截断） |
+//! | [`view_auth`] | `view_auth.py`（纯逻辑段） | 会话令牌签发/校验 · 角色与密级 · 口令哈希（scrypt）· 暴力破解防护 · IP 工具 · 时间口径 |
 //!
 //! ## 迁移状态
 //!
-//! 🟡 部分迁移：错误脱敏已落地（`agent_model` 需要它）。
+//! 🟡 部分迁移：错误脱敏 + 认证纯逻辑已落地（`blackboard_view` 用它们）。
 //!
-//! ⏳ 待迁移：会话令牌签发/校验 · 角色与密级判定 · 时间口径
-//! （`ts` / `parse_ts` / `beijing`，被 `blackboard_view` 使用）· SQLite 存储访问
-//! （落点遵循「存储句柄归 L0」的口径）。
+//! ⏳ 待迁移：SQLite/Pg 存储访问与 CLI（归组合根，`blackboard_view` bin 内落 PG 口径）。
 
 pub mod redact;
+pub mod view_auth;
 
 pub use redact::{safe_err, safe_err_with};

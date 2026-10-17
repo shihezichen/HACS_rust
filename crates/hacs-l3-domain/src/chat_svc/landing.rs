@@ -111,7 +111,9 @@ pub fn has_pid(value: &str) -> bool {
 /// `^[0-9a-f]{7,40}$`。
 pub fn is_commit(value: &str) -> bool {
     let b = value.as_bytes();
-    (7..=40).contains(&b.len()) && b.iter().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    (7..=40).contains(&b.len())
+        && b.iter()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
 /// `^commit\s*[:：=#]?\s*([0-9a-f]{7,40})$`（宽松：允许前缀写法）。
@@ -138,7 +140,8 @@ fn looks_like_curl(value: &str) -> bool {
         while let Some(pos) = lower[from..].find(m) {
             let abs = from + pos;
             let before_ok = abs == 0
-                || !(lower.as_bytes()[abs - 1].is_ascii_alphanumeric() || lower.as_bytes()[abs - 1] == b'_');
+                || !(lower.as_bytes()[abs - 1].is_ascii_alphanumeric()
+                    || lower.as_bytes()[abs - 1] == b'_');
             if before_ok {
                 let after = abs + m.len();
                 if after < lower.len() && lower.as_bytes()[after] == b'/' {
@@ -161,7 +164,10 @@ fn find_path(value: &str) -> Option<String> {
             let mut j = i;
             while j < b.len() {
                 let ch = value[j..].chars().next().unwrap();
-                if matches!(ch, ' ' | '，' | ',' | '。' | '；' | ';' | '）' | ')' | '】' | ']') {
+                if matches!(
+                    ch,
+                    ' ' | '，' | ',' | '。' | '；' | ';' | '）' | ')' | '】' | ']'
+                ) {
                     break;
                 }
                 j += ch.len_utf8();
@@ -220,10 +226,24 @@ pub fn landing_kind_of(value: &str) -> Option<(String, String)> {
 /// `validate_todo_evidence`：四类逐类校验，不过 422（错误码/文案逐字对齐）。
 pub fn validate_todo_evidence(raw: &serde_json::Value) -> Result<serde_json::Value, RequestError> {
     if !raw.is_object() {
-        return Err(RequestError::new(422, "bad_evidence", "落点必须是对象 {type, value}"));
+        return Err(RequestError::new(
+            422,
+            "bad_evidence",
+            "落点必须是对象 {type, value}",
+        ));
     }
-    let kind = raw.get("type").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let value = raw.get("value").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let kind = raw
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let value = raw
+        .get("value")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
     if !TODO_EVIDENCE_TYPES.contains(&kind.as_str()) {
         return Err(RequestError::new(
             422,
@@ -232,7 +252,11 @@ pub fn validate_todo_evidence(raw: &serde_json::Value) -> Result<serde_json::Val
         ));
     }
     if value.is_empty() {
-        return Err(RequestError::new(422, "bad_evidence", "落点 value 不能为空"));
+        return Err(RequestError::new(
+            422,
+            "bad_evidence",
+            "落点 value 不能为空",
+        ));
     }
     match kind.as_str() {
         "commit" => {
@@ -246,12 +270,20 @@ pub fn validate_todo_evidence(raw: &serde_json::Value) -> Result<serde_json::Val
         }
         "curl" => {
             if !has_http_code(&value) {
-                return Err(RequestError::new(422, "bad_evidence", "curl 落点需带 HTTP 状态码（如 200）"));
+                return Err(RequestError::new(
+                    422,
+                    "bad_evidence",
+                    "curl 落点需带 HTTP 状态码（如 200）",
+                ));
             }
         }
         "restart" => {
             if !(has_pid(&value) && has_timestamp(&value)) {
-                return Err(RequestError::new(422, "bad_evidence", "重启落点需带 PID 与时间戳"));
+                return Err(RequestError::new(
+                    422,
+                    "bad_evidence",
+                    "重启落点需带 PID 与时间戳",
+                ));
             }
         }
         _ => {
@@ -336,7 +368,11 @@ pub fn normalize_landing(
         }
         let text = entry.as_str().unwrap_or("").trim().to_string();
         if text.is_empty() {
-            return Err(RequestError::new(422, "bad_landing", "landing 元素不能为空"));
+            return Err(RequestError::new(
+                422,
+                "bad_landing",
+                "landing 元素不能为空",
+            ));
         }
         let (kind, norm_value) = match landing_kind_of(&text) {
             Some(kv) => kv,
@@ -352,7 +388,8 @@ pub fn normalize_landing(
                 ));
             }
         };
-        let checked = validate_todo_evidence(&serde_json::json!({"type": kind, "value": norm_value}))?;
+        let checked =
+            validate_todo_evidence(&serde_json::json!({"type": kind, "value": norm_value}))?;
         strings.push(take_chars(&text, TODO_LANDING_MAXLEN));
         evidences.push(checked);
     }
@@ -369,7 +406,10 @@ mod tests {
 
     #[test]
     fn test_landing_kind() {
-        assert_eq!(landing_kind_of("abc1234"), Some(("commit".into(), "abc1234".into())));
+        assert_eq!(
+            landing_kind_of("abc1234"),
+            Some(("commit".into(), "abc1234".into()))
+        );
         assert_eq!(
             landing_kind_of("commit: abc1234"),
             Some(("commit".into(), "abc1234".into()))
@@ -399,8 +439,14 @@ mod tests {
         assert_eq!(err.code, "bad_landing");
         assert_eq!(err.status, 422);
         // 超量拒收
-        let nine = serde_json::json!(["abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234"]);
-        assert_eq!(normalize_landing(Some(&nine)).unwrap_err().code, "bad_landing");
+        let nine = serde_json::json!([
+            "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234", "abc1234",
+            "abc1234"
+        ]);
+        assert_eq!(
+            normalize_landing(Some(&nine)).unwrap_err().code,
+            "bad_landing"
+        );
     }
 
     #[test]

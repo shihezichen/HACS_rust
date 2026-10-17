@@ -85,7 +85,14 @@ pub const SESS_ROLES: [&str; 3] = ["user", "assistant", "system"];
 pub const MSG_ID_PREFIX: &str = "m-";
 pub const MSG_ID_LEN: usize = 8;
 pub const MSG_ID_TRY: usize = 5;
-pub const MSG_STATES: [&str; 6] = ["queued", "processing", "done", "failed", "expired", "stalled"];
+pub const MSG_STATES: [&str; 6] = [
+    "queued",
+    "processing",
+    "done",
+    "failed",
+    "expired",
+    "stalled",
+];
 pub const MSG_TERMINAL_STATES: [&str; 4] = ["done", "failed", "expired", "stalled"];
 pub const MSG_OPEN_STATES: [&str; 2] = ["queued", "processing"];
 pub const MSG_DEFAULT_TOPIC: &str = "general";
@@ -145,7 +152,12 @@ pub struct ApiError {
 
 impl ApiError {
     pub fn new(status: u16, code: &str) -> Self {
-        ApiError { status, code: code.into(), detail: None, extra: vec![] }
+        ApiError {
+            status,
+            code: code.into(),
+            detail: None,
+            extra: vec![],
+        }
     }
     pub fn detail(mut self, d: impl Into<String>) -> Self {
         self.detail = Some(d.into());
@@ -215,19 +227,32 @@ pub fn safe_err(text: &str) -> String {
 /// "缺表/缺列"（降级）与"库挂了"（503）分开：PG 原话匹配（Python `_is_missing_schema`）。
 pub fn is_missing_schema(err: &str) -> bool {
     let low = err.to_ascii_lowercase();
-    ["does not exist", "undefined table", "undefined column", "no such table", "no such column", "unknown column"]
-        .iter()
-        .any(|k| low.contains(k))
+    [
+        "does not exist",
+        "undefined table",
+        "undefined column",
+        "no such table",
+        "no such column",
+        "unknown column",
+    ]
+    .iter()
+    .any(|k| low.contains(k))
 }
 
 // ================================================================ 时间
 
 pub fn now_epoch() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 pub fn now_micros() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_micros() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_micros() as i64)
+        .unwrap_or(0)
 }
 
 /// UTC civil 历法（Howard Hinnant 算法，chat_svc 同款）。
@@ -244,7 +269,14 @@ pub fn civil_from_epoch(epoch_s: i64) -> (i64, u32, u32, u32, u32, u32) {
     let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
     let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
     let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d, (secs / 3600) as u32, ((secs % 3600) / 60) as u32, (secs % 60) as u32)
+    (
+        y,
+        m,
+        d,
+        (secs / 3600) as u32,
+        ((secs % 3600) / 60) as u32,
+        (secs % 60) as u32,
+    )
 }
 
 /// `_iso_z`：timestamptz → `...Z` 形状（tmp/sess/msg 契约示例的形状）。
@@ -261,7 +293,10 @@ pub fn iso_utc_now() -> String {
     let secs = us.div_euclid(1_000_000);
     let frac = us.rem_euclid(1_000_000);
     let (y, mo, d, h, mi, s) = civil_from_epoch(secs);
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00", y, mo, d, h, mi, s, frac)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00",
+        y, mo, d, h, mi, s, frac
+    )
 }
 
 /// `to_utc`：ISO 字符串 / 数字 epoch（秒或毫秒）→ epoch 微秒；认不出来 None（裸时间按 UTC）。
@@ -307,7 +342,10 @@ pub fn parse_iso_to_epoch_us(text: &str) -> Option<i64> {
         rest = &rest[1..];
         let time = rest;
         // HH:MM[:SS[.frac]][Z|±HH:MM]
-        let hms: String = time.chars().take_while(|c| c.is_ascii_digit() || *c == ':' || *c == '.').collect();
+        let hms: String = time
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ':' || *c == '.')
+            .collect();
         let tz_part = &time[hms.len()..];
         let segs: Vec<&str> = hms.split(':').collect();
         if segs.is_empty() || segs.len() > 3 {
@@ -437,24 +475,25 @@ pub fn as_summary(value: &Value) -> Value {
     let parsed;
     let data: &Value = match value {
         Value::Object(_) => value,
-        Value::String(s) => {
-            match serde_json::from_str::<Value>(s) {
-                Ok(v) if v.is_object() => {
-                    parsed = v;
-                    &parsed
-                }
-                _ => return Value::Null,
+        Value::String(s) => match serde_json::from_str::<Value>(s) {
+            Ok(v) if v.is_object() => {
+                parsed = v;
+                &parsed
             }
-        }
+            _ => return Value::Null,
+        },
         _ => return Value::Null,
     };
     let mut out = Map::new();
     for key in ["agree", "object", "abstain", "absent"] {
         let names = data.get(key).cloned().unwrap_or(Value::Null);
-        out.insert(key.into(), match &names {
-            Value::Array(_) => names,
-            _ => Value::Array(vec![]),
-        });
+        out.insert(
+            key.into(),
+            match &names {
+                Value::Array(_) => names,
+                _ => Value::Array(vec![]),
+            },
+        );
     }
     let required = data.get("required");
     out.insert(
@@ -464,7 +503,10 @@ pub fn as_summary(value: &Value) -> Value {
             _ => Value::Null,
         },
     );
-    out.insert("present".into(), as_int(data.get("present").unwrap_or(&Value::Null)));
+    out.insert(
+        "present".into(),
+        as_int(data.get("present").unwrap_or(&Value::Null)),
+    );
     out.insert(
         "passed".into(),
         match data.get("passed") {
@@ -472,7 +514,10 @@ pub fn as_summary(value: &Value) -> Value {
             _ => Value::Null,
         },
     );
-    out.insert("attendance".into(), as_attendance(data.get("attendance").unwrap_or(&Value::Null)));
+    out.insert(
+        "attendance".into(),
+        as_attendance(data.get("attendance").unwrap_or(&Value::Null)),
+    );
     Value::Object(out)
 }
 
@@ -536,7 +581,9 @@ fn b32_encode_upper(data: &[u8]) -> String {
 fn random_bytes(n: usize) -> Vec<u8> {
     use std::io::Read;
     let mut buf = vec![0u8; n];
-    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf)).expect("urandom");
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut buf))
+        .expect("urandom");
     buf
 }
 
@@ -551,7 +598,9 @@ pub fn tmp_id_ok(tmp_id: &str) -> bool {
     if b.len() != TMP_ID_PREFIX.len() + TMP_ID_LEN || !tmp_id.starts_with(TMP_ID_PREFIX) {
         return false;
     }
-    b[TMP_ID_PREFIX.len()..].iter().all(|&c| TMP_ID_ALPHABET.as_bytes().contains(&c))
+    b[TMP_ID_PREFIX.len()..]
+        .iter()
+        .all(|&c| TMP_ID_ALPHABET.as_bytes().contains(&c))
 }
 
 pub fn msg_id_ok(msg_id: &str) -> bool {
@@ -559,7 +608,9 @@ pub fn msg_id_ok(msg_id: &str) -> bool {
     if b.len() != 2 + MSG_ID_LEN || !msg_id.starts_with(MSG_ID_PREFIX) {
         return false;
     }
-    b[2..].iter().all(|&c| TMP_ID_ALPHABET.as_bytes().contains(&c))
+    b[2..]
+        .iter()
+        .all(|&c| TMP_ID_ALPHABET.as_bytes().contains(&c))
 }
 
 /// `new_session_id`：`as-YYYYMMDD-HHMMSS-xxxx`（UTC，base32 小写字母表 a-z2-7）。
@@ -568,7 +619,13 @@ pub fn new_session_id() -> String {
     let raw = b32_encode_upper(&random_bytes(3)).to_ascii_lowercase();
     format!(
         "{}{:04}{:02}{:02}-{:02}{:02}{:02}-{}",
-        SESS_ID_PREFIX, y, mo, d, h, mi, s,
+        SESS_ID_PREFIX,
+        y,
+        mo,
+        d,
+        h,
+        mi,
+        s,
         &raw[..SESS_ID_RAND_LEN]
     )
 }
@@ -583,7 +640,9 @@ pub fn session_id_ok(session_id: &str) -> bool {
     if !digits(3..11) || b[11] != b'-' || !digits(12..18) || b[18] != b'-' {
         return false;
     }
-    b[19..].iter().all(|&c| b"abcdefghijklmnopqrstuvwxyz234567".contains(&c))
+    b[19..]
+        .iter()
+        .all(|&c| b"abcdefghijklmnopqrstuvwxyz234567".contains(&c))
 }
 
 // ================================================================ 运行时
@@ -606,7 +665,10 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
-        Self { node_id: Mutex::new("unknown".into()), ..Default::default() }
+        Self {
+            node_id: Mutex::new("unknown".into()),
+            ..Default::default()
+        }
     }
     pub fn node_id(&self) -> String {
         self.node_id.lock().map(|g| g.clone()).unwrap_or_default()
@@ -629,7 +691,11 @@ impl BbStore {
         }
         let conn = postgres::Client::connect(dsn, postgres::NoTls)
             .map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
-        Ok(BbStore { dsn: dsn.to_string(), lock: Mutex::new(()), conn: Mutex::new(Some(conn)) })
+        Ok(BbStore {
+            dsn: dsn.to_string(),
+            lock: Mutex::new(()),
+            conn: Mutex::new(Some(conn)),
+        })
     }
 
     pub fn dsn(&self) -> &str {
@@ -702,9 +768,12 @@ impl BbStore {
             *guard = Some(c);
         }
         let conn = guard.as_mut().unwrap();
-        let mut tx = conn.transaction().map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
+        let mut tx = conn
+            .transaction()
+            .map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
         f(&mut tx).map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
-        tx.commit().map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
+        tx.commit()
+            .map_err(|e| DbUnavailable(safe_err(&format!("{e}"))))?;
         Ok(())
     }
 }
@@ -715,7 +784,10 @@ pub const SELECT_COLUMNS: &str = "entry_id, ts, author, topic, kind, content, re
 
 /// `row_to_entry`：ts 原样（psycopg2 isoformat 形状由 PG 读出转字符串）。
 pub fn row_to_entry(row: &postgres::Row) -> Value {
-    let got = row.try_get::<_, Option<Value>>("refs").unwrap_or(None).unwrap_or(Value::Null);
+    let got = row
+        .try_get::<_, Option<Value>>("refs")
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
     json!({
         "entry_id": row.get::<_, i64>("entry_id"),
         "ts": ts_value(row, "ts"),
@@ -748,9 +820,15 @@ pub fn iso_pg(epoch_us: i64) -> String {
     let frac = epoch_us.rem_euclid(1_000_000);
     let (y, mo, d, h, mi, s) = civil_from_epoch(secs);
     if frac == 0 {
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+00:00", y, mo, d, h, mi, s)
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+00:00",
+            y, mo, d, h, mi, s
+        )
     } else {
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00", y, mo, d, h, mi, s, frac)
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00",
+            y, mo, d, h, mi, s, frac
+        )
     }
 }
 
@@ -764,9 +842,11 @@ pub fn ts_opt(row: &postgres::Row, col: &str) -> Value {
     }
 }
 
-
 pub fn ts_opt_at(row: &postgres::Row, idx: usize) -> Value {
-    let us: Option<i64> = row.try_get::<_, Option<system_time_from_row::Ts>>(idx).ok().map(|t| t.map(|v| v.0).unwrap_or(0));
+    let us: Option<i64> = row
+        .try_get::<_, Option<system_time_from_row::Ts>>(idx)
+        .ok()
+        .map(|t| t.map(|v| v.0).unwrap_or(0));
     match us {
         Some(0) | None => Value::Null,
         Some(epoch_us) => {
@@ -774,9 +854,15 @@ pub fn ts_opt_at(row: &postgres::Row, idx: usize) -> Value {
             let frac = epoch_us.rem_euclid(1_000_000);
             let (y, mo, d, h, mi, s) = civil_from_epoch(secs);
             if frac == 0 {
-                Value::String(format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+00:00", y, mo, d, h, mi, s))
+                Value::String(format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+00:00",
+                    y, mo, d, h, mi, s
+                ))
             } else {
-                Value::String(format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00", y, mo, d, h, mi, s, frac))
+                Value::String(format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00",
+                    y, mo, d, h, mi, s, frac
+                ))
             }
         }
     }
@@ -797,7 +883,10 @@ pub mod system_time_from_row {
             Ok(Ts(us + PG_EPOCH_US))
         }
         fn accepts(ty: &postgres::types::Type) -> bool {
-            matches!(ty, &postgres::types::Type::TIMESTAMPTZ | &postgres::types::Type::TIMESTAMP)
+            matches!(
+                ty,
+                &postgres::types::Type::TIMESTAMPTZ | &postgres::types::Type::TIMESTAMP
+            )
         }
     }
 }
@@ -812,8 +901,16 @@ pub struct BbSvc {
 }
 
 impl BbSvc {
-    pub fn new(store: std::sync::Arc<BbStore>, runtime: std::sync::Arc<Runtime>, peer_map: Vec<(String, String)>) -> Self {
-        BbSvc { store, runtime, peer_map }
+    pub fn new(
+        store: std::sync::Arc<BbStore>,
+        runtime: std::sync::Arc<Runtime>,
+        peer_map: Vec<(String, String)>,
+    ) -> Self {
+        BbSvc {
+            store,
+            runtime,
+            peer_map,
+        }
     }
 
     /// `insert_entry`：写一条黑板条目（本服务唯一的黑板写路径）。
@@ -831,7 +928,10 @@ impl BbSvc {
         let refs_v = refs.clone();
         let row = self
             .store
-            .query_one(sql, &[&author, &topic, &kind, &content, &refs_v, &embedding])?
+            .query_one(
+                sql,
+                &[&author, &topic, &kind, &content, &refs_v, &embedding],
+            )?
             .ok_or_else(|| DbUnavailable("insert 没有返回 entry_id".into()))?;
         Ok(json!({
             "entry_id": row.get::<_, i64>(0),
@@ -867,7 +967,11 @@ impl BbSvc {
             params.push(Box::new(s.to_string()));
             where_parts.push(format!("ts >= ${}::text::timestamptz", params.len()));
         }
-        let st = if status != Some("all") { Some(status.unwrap_or("active")) } else { None };
+        let st = if status != Some("all") {
+            Some(status.unwrap_or("active"))
+        } else {
+            None
+        };
         if let Some(s) = st {
             params.push(Box::new(s.to_string()));
             where_parts.push(format!("status = ${}", params.len()));
@@ -877,7 +981,10 @@ impl BbSvc {
         if !where_parts.is_empty() {
             sql.push_str(&format!(" WHERE {}", where_parts.join(" AND ")));
         }
-        sql.push_str(&format!(" ORDER BY ts DESC, entry_id DESC LIMIT ${}", params.len()));
+        sql.push_str(&format!(
+            " ORDER BY ts DESC, entry_id DESC LIMIT ${}",
+            params.len()
+        ));
         let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|b| b.as_ref()).collect();
         let rows = self.store.query(&sql, &refs)?;
         Ok(rows.iter().map(row_to_entry).collect())
@@ -926,7 +1033,11 @@ impl BbSvc {
         }
         params.push(Box::new(vector.to_string()));
         sql.push_str(" ORDER BY embedding <=> ");
-        sql.push_str(&format!("${}::text::vector LIMIT ${}", params.len(), params.len() + 1));
+        sql.push_str(&format!(
+            "${}::text::vector LIMIT ${}",
+            params.len(),
+            params.len() + 1
+        ));
         params.push(Box::new(limit));
         let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|b| b.as_ref()).collect();
         let rows = self.store.query(&sql, &refs)?;
@@ -954,21 +1065,28 @@ impl BbSvc {
             "SELECT {} FROM blackboard_entries WHERE content ILIKE $1 AND status = $2",
             SELECT_COLUMNS
         );
-        let mut params: Vec<Box<dyn ToSql + Sync>> =
-            vec![Box::new(Self::like_pattern(q)), Box::new("active".to_string())];
+        let mut params: Vec<Box<dyn ToSql + Sync>> = vec![
+            Box::new(Self::like_pattern(q)),
+            Box::new("active".to_string()),
+        ];
         if let Some(t) = topic {
             params.push(Box::new(t.to_string()));
             sql.push_str(&format!(" AND topic = ${}", params.len()));
         }
         params.push(Box::new(limit));
-        sql.push_str(&format!(" ORDER BY ts DESC, entry_id DESC LIMIT ${}", params.len()));
+        sql.push_str(&format!(
+            " ORDER BY ts DESC, entry_id DESC LIMIT ${}",
+            params.len()
+        ));
         let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|b| b.as_ref()).collect();
         let rows = self.store.query(&sql, &refs)?;
         Ok(rows
             .iter()
             .map(|row| {
                 let mut e = row_to_entry(row);
-                e.as_object_mut().unwrap().insert("score".into(), Value::Null);
+                e.as_object_mut()
+                    .unwrap()
+                    .insert("score".into(), Value::Null);
                 e
             })
             .collect())
@@ -983,7 +1101,10 @@ fn round4(x: f64) -> f64 {
 
 pub fn db_health(svc: &BbSvc) -> (bool, Value) {
     let started = Instant::now();
-    match svc.store.query_one("SELECT count(*) FROM blackboard_entries", &[]) {
+    match svc
+        .store
+        .query_one("SELECT count(*) FROM blackboard_entries", &[])
+    {
         Err(e) => (
             false,
             json!({"db": {"ok": false, "error": safe_err(&e.0)}, "entries": {"total": null}}),
@@ -991,7 +1112,10 @@ pub fn db_health(svc: &BbSvc) -> (bool, Value) {
         Ok(row) => {
             let latency_ms = started.elapsed().as_millis() as i64;
             let total = row.map(|r| r.get::<_, i64>(0)).unwrap_or(0);
-            (true, json!({"db": {"ok": true, "latency_ms": latency_ms}, "entries": {"total": total}}))
+            (
+                true,
+                json!({"db": {"ok": true, "latency_ms": latency_ms}, "entries": {"total": total}}),
+            )
         }
     }
 }
@@ -1016,34 +1140,44 @@ pub fn health_payload(svc: &BbSvc) -> (u16, Value) {
     );
     let g = |m: &Mutex<Option<String>>| m.lock().map(|g| g.clone()).unwrap_or(None);
     obj.insert("tmp_swept_at".into(), json!(g(&svc.runtime.tmp_swept_at)));
-    obj.insert("tmp".into(), json!({
-        "swept_at": g(&svc.runtime.tmp_swept_at),
-        "sweeps": svc.runtime.tmp_sweeps.load(Ordering::Relaxed),
-        "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
-        "last_error": g(&svc.runtime.tmp_sweep_error),
-    }));
+    obj.insert(
+        "tmp".into(),
+        json!({
+            "swept_at": g(&svc.runtime.tmp_swept_at),
+            "sweeps": svc.runtime.tmp_sweeps.load(Ordering::Relaxed),
+            "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
+            "last_error": g(&svc.runtime.tmp_sweep_error),
+        }),
+    );
     obj.insert("sess_swept_at".into(), json!(g(&svc.runtime.sess_swept_at)));
-    obj.insert("sess".into(), json!({
-        "swept_at": g(&svc.runtime.sess_swept_at),
-        "sweeps": svc.runtime.sess_sweeps.load(Ordering::Relaxed),
-        "archived": svc.runtime.sess_archived.load(Ordering::Relaxed),
-        "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
-        "last_error": g(&svc.runtime.sess_sweep_error),
-    }));
+    obj.insert(
+        "sess".into(),
+        json!({
+            "swept_at": g(&svc.runtime.sess_swept_at),
+            "sweeps": svc.runtime.sess_sweeps.load(Ordering::Relaxed),
+            "archived": svc.runtime.sess_archived.load(Ordering::Relaxed),
+            "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
+            "last_error": g(&svc.runtime.sess_sweep_error),
+        }),
+    );
     obj.insert("msg_swept_at".into(), json!(g(&svc.runtime.msg_swept_at)));
-    obj.insert("msg".into(), json!({
-        "swept_at": g(&svc.runtime.msg_swept_at),
-        "sweeps": svc.runtime.msg_sweeps.load(Ordering::Relaxed),
-        "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
-        "last_error": g(&svc.runtime.msg_sweep_error),
-        "states": svc.msg_stats(),
-    }));
+    obj.insert(
+        "msg".into(),
+        json!({
+            "swept_at": g(&svc.runtime.msg_swept_at),
+            "sweeps": svc.runtime.msg_sweeps.load(Ordering::Relaxed),
+            "sweep_interval_s": TMP_SWEEP_INTERVAL_S,
+            "last_error": g(&svc.runtime.msg_sweep_error),
+            "states": svc.msg_stats(),
+        }),
+    );
     (if ok { 200 } else { 503 }, payload)
 }
 
 // ================================================================ msg_log（消息可靠投递）
 
-pub const MSG_COLUMNS: &str = "msg_id, seq, from_member, to_member, session_id, topic, body, content_ref, \
+pub const MSG_COLUMNS: &str =
+    "msg_id, seq, from_member, to_member, session_id, topic, body, content_ref, \
      state, attempts, last_error, created_at, updated_at, acked_at, done_at, expires_at";
 
 pub fn row_to_msg(row: &postgres::Row) -> Value {
@@ -1094,7 +1228,9 @@ impl BbSvc {
     ) -> Result<Value, DbUnavailable> {
         let ref_json: Option<Value> = content_ref.cloned();
         for _ in 0..MSG_ID_TRY {
-            let candidate = msg_id.map(str::to_string).unwrap_or_else(|| new_prefixed_id(MSG_ID_PREFIX));
+            let candidate = msg_id
+                .map(str::to_string)
+                .unwrap_or_else(|| new_prefixed_id(MSG_ID_PREFIX));
             let sql = "INSERT INTO msg_log (msg_id, from_member, to_member, session_id, topic, body, content_ref, expires_at) \
                        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, now() + make_interval(secs => $8)) \
                        ON CONFLICT (msg_id) DO NOTHING RETURNING seq, created_at, expires_at";
@@ -1103,7 +1239,16 @@ impl BbSvc {
             let topic_s = topic.to_string();
             let row = self.store.query_one(
                 sql,
-                &[&candidate, &from_member, &to_member, &session_opt, &topic_s, &body_opt, &ref_json, &(ttl_s as f64)],
+                &[
+                    &candidate,
+                    &from_member,
+                    &to_member,
+                    &session_opt,
+                    &topic_s,
+                    &body_opt,
+                    &ref_json,
+                    &(ttl_s as f64),
+                ],
             )?;
             if let Some(row) = row {
                 let seq: i64 = row.get(0);
@@ -1119,17 +1264,25 @@ impl BbSvc {
             if let Some(mid) = msg_id {
                 if let Some(existing) = self.get_msg(mid)? {
                     let mut v = existing;
-                    v.as_object_mut().unwrap().insert("duplicate".into(), Value::Bool(true));
+                    v.as_object_mut()
+                        .unwrap()
+                        .insert("duplicate".into(), Value::Bool(true));
                     return Ok(v);
                 }
             }
         }
-        Err(DbUnavailable(format!("msg_id 连续 {} 次撞主键，放弃", MSG_ID_TRY)))
+        Err(DbUnavailable(format!(
+            "msg_id 连续 {} 次撞主键，放弃",
+            MSG_ID_TRY
+        )))
     }
 
     pub fn get_msg(&self, msg_id: &str) -> Result<Option<Value>, DbUnavailable> {
         let sql = format!("SELECT {} FROM msg_log WHERE msg_id = $1", MSG_COLUMNS);
-        Ok(self.store.query_one(&sql, &[&msg_id])?.map(|r| row_to_msg(&r)))
+        Ok(self
+            .store
+            .query_one(&sql, &[&msg_id])?
+            .map(|r| row_to_msg(&r)))
     }
 
     pub fn list_inbox(
@@ -1142,7 +1295,9 @@ impl BbSvc {
             "SELECT {} FROM msg_log WHERE to_member = $1 AND state = ANY($2::text[]) ORDER BY seq LIMIT $3",
             MSG_COLUMNS
         );
-        let rows = self.store.query(&sql, &[&to_member, &states.to_vec(), &limit])?;
+        let rows = self
+            .store
+            .query(&sql, &[&to_member, &states.to_vec(), &limit])?;
         Ok(rows.iter().map(row_to_msg).collect())
     }
 
@@ -1153,7 +1308,10 @@ impl BbSvc {
              WHERE msg_id = $1 AND state = 'queued' RETURNING {}",
             MSG_COLUMNS
         );
-        Ok(self.store.query_one(&sql, &[&msg_id])?.map(|r| row_to_msg(&r)))
+        Ok(self
+            .store
+            .query_one(&sql, &[&msg_id])?
+            .map(|r| row_to_msg(&r)))
     }
 
     pub fn msg_finish(
@@ -1176,7 +1334,10 @@ impl BbSvc {
     }
 
     pub fn msg_stats(&self) -> Value {
-        match self.store.query("SELECT state, count(*) FROM msg_log GROUP BY state", &[]) {
+        match self
+            .store
+            .query("SELECT state, count(*) FROM msg_log GROUP BY state", &[])
+        {
             Ok(rows) => {
                 let mut m = Map::new();
                 for r in &rows {
@@ -1206,7 +1367,10 @@ impl BbSvc {
         );
         let stuck = self.store.query(&stall_sql, &[])?;
         if !stuck.is_empty() {
-            log_line(&format!("msg_log：{} 条 processing 卡死已标 stalled（未自动重投）", stuck.len()));
+            log_line(&format!(
+                "msg_log：{} 条 processing 卡死已标 stalled（未自动重投）",
+                stuck.len()
+            ));
         }
         n += stuck.len();
         Ok(n)
@@ -1236,8 +1400,14 @@ pub fn row_to_tmp(row: &postgres::Row, with_body: bool) -> Value {
     let reads_max: i32 = row.get(7);
     let reads_count: i32 = row.get(8);
     let readers: Vec<String> = row.get(9);
-    let expires_us: i64 = row.get::<_, Option<system_time_from_row::Ts>>(10).map(|t| t.0).unwrap_or(0);
-    let created_us: i64 = row.get::<_, Option<system_time_from_row::Ts>>(11).map(|t| t.0).unwrap_or(0);
+    let expires_us: i64 = row
+        .get::<_, Option<system_time_from_row::Ts>>(10)
+        .map(|t| t.0)
+        .unwrap_or(0);
+    let created_us: i64 = row
+        .get::<_, Option<system_time_from_row::Ts>>(11)
+        .map(|t| t.0)
+        .unwrap_or(0);
     let destroyed: Option<system_time_from_row::Ts> = row.get(12);
     let destroy_reason: Option<String> = row.get(13);
     let now_us = now_micros();
@@ -1260,7 +1430,9 @@ pub fn row_to_tmp(row: &postgres::Row, with_body: bool) -> Value {
         "expired": expires_us <= now_us,
     });
     if with_body {
-        item.as_object_mut().unwrap().insert("body".into(), json!(body.unwrap_or_default()));
+        item.as_object_mut()
+            .unwrap()
+            .insert("body".into(), json!(body.unwrap_or_default()));
     }
     item
 }
@@ -1269,7 +1441,12 @@ pub fn row_to_tmp_with_now(row: &postgres::Row, now_us: i64, with_body: bool) ->
     let mut item = row_to_tmp(row, with_body);
     item.as_object_mut().unwrap().insert(
         "expired".into(),
-        json!(row.get::<_, Option<system_time_from_row::Ts>>(10).map(|t| t.0).unwrap_or(0) <= now_us),
+        json!(
+            row.get::<_, Option<system_time_from_row::Ts>>(10)
+                .map(|t| t.0)
+                .unwrap_or(0)
+                <= now_us
+        ),
     );
     item
 }
@@ -1285,7 +1462,10 @@ impl BbSvc {
     /// `select_tmp`：按 id 取一行（含正文）。
     pub fn select_tmp(&self, tmp_id: &str) -> Result<Option<Value>, DbUnavailable> {
         let sql = format!("SELECT {} FROM tmp_shared WHERE tmp_id = $1", TMP_COLUMNS);
-        Ok(self.store.query_one(&sql, &[&tmp_id])?.map(|r| row_to_tmp(&r, true)))
+        Ok(self
+            .store
+            .query_one(&sql, &[&tmp_id])?
+            .map(|r| row_to_tmp(&r, true)))
     }
 
     pub fn tmp_owner_active_count(&self, owner: &str) -> Result<i64, DbUnavailable> {
@@ -1316,7 +1496,17 @@ impl BbSvc {
             let bytes_len = body.len() as i32;
             match self.store.query_one(
                 sql,
-                &[&tmp_id, &owner, &audience.to_vec(), &title, &body, &bytes_len, &digest, &(reads_max as i32), &(ttl_s as f64)],
+                &[
+                    &tmp_id,
+                    &owner,
+                    &audience.to_vec(),
+                    &title,
+                    &body,
+                    &bytes_len,
+                    &digest,
+                    &(reads_max as i32),
+                    &(ttl_s as f64),
+                ],
             ) {
                 Ok(Some(row)) => {
                     return Ok(json!({
@@ -1339,7 +1529,10 @@ impl BbSvc {
                 }
             }
         }
-        Err(DbUnavailable(safe_err(&format!("tmp_id 连续 5 次撞主键，放弃: {}", last_err))))
+        Err(DbUnavailable(safe_err(&format!(
+            "tmp_id 连续 5 次撞主键，放弃: {}",
+            last_err
+        ))))
     }
 
     /// `tmp_counted_read`：一条 UPDATE 同时记 reader + 读满销毁（天然原子）。
@@ -1378,7 +1571,9 @@ impl BbSvc {
              WHERE tmp_id = $1 AND destroyed_at IS NULL AND expires_at <= now() RETURNING destroyed_at",
             &[&tmp_id],
         )?;
-        Ok(row.and_then(|r| r.get::<_, Option<system_time_from_row::Ts>>(0)).map(|t| iso_z(t.0)))
+        Ok(row
+            .and_then(|r| r.get::<_, Option<system_time_from_row::Ts>>(0))
+            .map(|t| iso_z(t.0)))
     }
 
     pub fn tmp_destroy_by_owner(&self, tmp_id: &str) -> Result<Option<String>, DbUnavailable> {
@@ -1387,14 +1582,17 @@ impl BbSvc {
              WHERE tmp_id = $1 AND destroyed_at IS NULL RETURNING destroyed_at",
             &[&tmp_id],
         )?;
-        Ok(row.and_then(|r| r.get::<_, Option<system_time_from_row::Ts>>(0)).map(|t| iso_z(t.0)))
+        Ok(row
+            .and_then(|r| r.get::<_, Option<system_time_from_row::Ts>>(0))
+            .map(|t| iso_z(t.0)))
     }
 
     /// `tmp_enforce_capacity`：全局容量兜底（超 TMP_ACTIVE_MAX 按 expires_at 最早销毁）。
     pub fn tmp_enforce_capacity(&self) -> Result<usize, DbUnavailable> {
-        let row = self
-            .store
-            .query_one("SELECT count(*) FROM tmp_shared WHERE destroyed_at IS NULL", &[])?;
+        let row = self.store.query_one(
+            "SELECT count(*) FROM tmp_shared WHERE destroyed_at IS NULL",
+            &[],
+        )?;
         let active = row.map(|r| r.get::<_, i64>(0)).unwrap_or(0);
         let over = active - TMP_ACTIVE_MAX;
         if over <= 0 {
@@ -1430,8 +1628,14 @@ impl BbSvc {
         limit: i64,
     ) -> Result<(String, Vec<Value>), DbUnavailable> {
         let now_us = now_micros();
-        let (mode, where_s, mut params): (String, String, Vec<Box<dyn ToSql + Sync>>) = if mine && !inbox {
-            ("mine".to_string(), "owner = $1".to_string(), vec![Box::new(peer.to_string())])
+        let (mode, where_s, mut params): (String, String, Vec<Box<dyn ToSql + Sync>>) = if mine
+            && !inbox
+        {
+            (
+                "mine".to_string(),
+                "owner = $1".to_string(),
+                vec![Box::new(peer.to_string())],
+            )
         } else if inbox && !mine {
             (
                 "inbox".to_string(),
@@ -1447,24 +1651,30 @@ impl BbSvc {
         };
         let sql = format!(
             "SELECT {} FROM tmp_shared WHERE {} ORDER BY created_at DESC LIMIT ${}",
-            TMP_COLUMNS, where_s, params.len() + 1
+            TMP_COLUMNS,
+            where_s,
+            params.len() + 1
         );
         params.push(Box::new(limit));
         let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|b| b.as_ref()).collect();
         let rows = self.store.query(&sql, &refs)?;
         Ok((
             mode.to_string(),
-            rows.iter().map(|r| row_to_tmp_with_now(r, now_us, false)).collect(),
+            rows.iter()
+                .map(|r| row_to_tmp_with_now(r, now_us, false))
+                .collect(),
         ))
     }
 }
 
 // ================================================================ Agent 会话（/sess）
 
-pub const SESS_COLUMNS: &str = "session_id, topic, title, owner, members, state, created_at, last_turn_at, \
+pub const SESS_COLUMNS: &str =
+    "session_id, topic, title, owner, members, state, created_at, last_turn_at, \
      idle_ttl_s, turn_count, closed_at, close_reason, archive_ref, note";
 
-pub const SESS_TURN_COLUMNS: &str = "turn_id, session_id, seq, from_member, to_member, role, content, \
+pub const SESS_TURN_COLUMNS: &str =
+    "turn_id, session_id, seq, from_member, to_member, role, content, \
      content_ref, bytes, ts";
 
 pub fn row_to_agent_session(row: &postgres::Row) -> Value {
@@ -1538,26 +1748,42 @@ impl BbSvc {
         }
         if let Some(s) = since {
             params.push(Box::new(s.to_string()));
-            where_parts.push(format!("created_at >= ${}::text::timestamptz", params.len()));
+            where_parts.push(format!(
+                "created_at >= ${}::text::timestamptz",
+                params.len()
+            ));
         }
         params.push(Box::new(limit));
         let mut sql = format!("SELECT {} FROM agent_sessions", SESS_COLUMNS);
         if !where_parts.is_empty() {
             sql.push_str(&format!(" WHERE {}", where_parts.join(" AND ")));
         }
-        sql.push_str(&format!(" ORDER BY created_at DESC, session_id DESC LIMIT ${}", params.len()));
+        sql.push_str(&format!(
+            " ORDER BY created_at DESC, session_id DESC LIMIT ${}",
+            params.len()
+        ));
         let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|b| b.as_ref()).collect();
         let rows = self.store.query(&sql, &refs)?;
         Ok(rows.iter().map(row_to_agent_session).collect())
     }
 
     pub fn select_agent_session(&self, session_id: &str) -> Result<Option<Value>, DbUnavailable> {
-        let sql = format!("SELECT {} FROM agent_sessions WHERE session_id = $1", SESS_COLUMNS);
-        Ok(self.store.query_one(&sql, &[&session_id])?.map(|r| row_to_agent_session(&r)))
+        let sql = format!(
+            "SELECT {} FROM agent_sessions WHERE session_id = $1",
+            SESS_COLUMNS
+        );
+        Ok(self
+            .store
+            .query_one(&sql, &[&session_id])?
+            .map(|r| row_to_agent_session(&r)))
     }
 
     /// 最近 limit 轮，按 seq 升序返回（SQL DESC 取最近，Python 一样 reversed）。
-    pub fn select_agent_turns(&self, session_id: &str, limit: i64) -> Result<Vec<Value>, DbUnavailable> {
+    pub fn select_agent_turns(
+        &self,
+        session_id: &str,
+        limit: i64,
+    ) -> Result<Vec<Value>, DbUnavailable> {
         let sql = format!(
             "SELECT {} FROM agent_session_turns WHERE session_id = $1 ORDER BY seq DESC LIMIT $2",
             SESS_TURN_COLUMNS
@@ -1594,11 +1820,24 @@ impl BbSvc {
              VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING {}",
             SESS_TURN_COLUMNS
         );
-        match self.store.query_one(&sql, &[&session_id, &from_member, &to_member, &role, &content, &ref_json]) {
+        match self.store.query_one(
+            &sql,
+            &[
+                &session_id,
+                &from_member,
+                &to_member,
+                &role,
+                &content,
+                &ref_json,
+            ],
+        ) {
             Err(e) => {
                 let low = e.0.to_lowercase();
-                if low.contains("closed") || low.contains("expired") || low.contains("terminal")
-                    || low.contains("not open") || e.0.contains("不是 open")
+                if low.contains("closed")
+                    || low.contains("expired")
+                    || low.contains("terminal")
+                    || low.contains("not open")
+                    || e.0.contains("不是 open")
                 {
                     return Err(DbUnavailable(e.0)); // 保留原文，bin 层判 SessionNotOpen
                 }
@@ -1628,11 +1867,20 @@ impl BbSvc {
             );
             match self.store.query_one(
                 &sql,
-                &[&session_id, &topic, &title, &owner, &members_json, &(idle_ttl_s as i32)],
+                &[
+                    &session_id,
+                    &topic,
+                    &title,
+                    &owner,
+                    &members_json,
+                    &(idle_ttl_s as i32),
+                ],
             ) {
                 Ok(Some(row)) => {
                     let mut v = row_to_agent_session(&row);
-                    v.as_object_mut().unwrap().insert("created".into(), Value::Bool(true));
+                    v.as_object_mut()
+                        .unwrap()
+                        .insert("created".into(), Value::Bool(true));
                     return Ok(v);
                 }
                 Ok(None) => continue,
@@ -1644,7 +1892,10 @@ impl BbSvc {
                 }
             }
         }
-        Err(DbUnavailable(format!("session_id 连续 {} 次撞主键，放弃", SESS_ID_TRY)))
+        Err(DbUnavailable(format!(
+            "session_id 连续 {} 次撞主键，放弃",
+            SESS_ID_TRY
+        )))
     }
 
     /// `SESS_CLAIM_SQL`：认领状态机迁移（WHERE state='open' 原子）。
@@ -1660,7 +1911,10 @@ impl BbSvc {
              WHERE session_id = $4 AND state = 'open' RETURNING {}",
             SESS_COLUMNS
         );
-        Ok(self.store.query_one(&sql, &[&state, &reason, &note, &session_id])?.map(|r| row_to_agent_session(&r)))
+        Ok(self
+            .store
+            .query_one(&sql, &[&state, &reason, &note, &session_id])?
+            .map(|r| row_to_agent_session(&r)))
     }
 
     /// `SESS_IDLE_SWEEP_SQL`：空闲超时（now - COALESCE(last_turn_at, created_at) > idle_ttl_s）。
@@ -1685,7 +1939,11 @@ impl BbSvc {
         Ok(rows.iter().map(|r| r.get::<_, String>(0)).collect())
     }
 
-    pub fn sess_set_archive_ref(&self, session_id: &str, content_id: i64) -> Result<(), DbUnavailable> {
+    pub fn sess_set_archive_ref(
+        &self,
+        session_id: &str,
+        content_id: i64,
+    ) -> Result<(), DbUnavailable> {
         self.store.query(
             "UPDATE agent_sessions SET archive_ref = $1 WHERE session_id = $2 AND archive_ref IS NULL",
             &[&content_id, &session_id],
@@ -1767,11 +2025,22 @@ impl BbSvc {
         };
         let content_id = self.sess_archive_content(
             session_id,
-            if s("owner").is_empty() { "unknown" } else { s("owner") },
+            if s("owner").is_empty() {
+                "unknown"
+            } else {
+                s("owner")
+            },
             &title,
             &body,
-            if s("topic").is_empty() { SESS_DEFAULT_TOPIC } else { s("topic") },
-            session.get("turn_count").and_then(Value::as_i64).unwrap_or(0),
+            if s("topic").is_empty() {
+                SESS_DEFAULT_TOPIC
+            } else {
+                s("topic")
+            },
+            session
+                .get("turn_count")
+                .and_then(Value::as_i64)
+                .unwrap_or(0),
             session.get("close_reason").and_then(Value::as_str),
             SESS_ARCHIVE_EXPIRES_DAYS,
         )?;
@@ -1786,7 +2055,11 @@ impl BbSvc {
         reason: &str,
         note: Option<&str>,
     ) -> Result<(bool, Option<Value>, Option<i64>, i64), DbUnavailable> {
-        let state = if reason == SESS_CLOSE_REASON_IDLE { "expired" } else { "closed" };
+        let state = if reason == SESS_CLOSE_REASON_IDLE {
+            "expired"
+        } else {
+            "closed"
+        };
         let Some(row) = self.sess_claim(session_id, state, reason, note)? else {
             return Ok((false, None, None, 0));
         };
@@ -1795,11 +2068,19 @@ impl BbSvc {
         let mut turns_cleared = 0i64;
         match self.archive_agent_session(session_id) {
             Ok(r) => archive_ref = r,
-            Err(e) => log_line(&format!("会话归档未完成 session_id={}: {}", session_id, safe_err(&e.0))),
+            Err(e) => log_line(&format!(
+                "会话归档未完成 session_id={}: {}",
+                session_id,
+                safe_err(&e.0)
+            )),
         }
         match self.clear_agent_session_turn_bodies(session_id) {
             Ok(n) => turns_cleared = n,
-            Err(e) => log_line(&format!("会话清正文未完成 session_id={}: {}", session_id, safe_err(&e.0))),
+            Err(e) => log_line(&format!(
+                "会话清正文未完成 session_id={}: {}",
+                session_id,
+                safe_err(&e.0)
+            )),
         }
         let fresh = self.select_agent_session(session_id)?;
         Ok((true, fresh, archive_ref, turns_cleared))
@@ -1832,9 +2113,30 @@ pub fn build_session_archive_markdown(session: &Value, turns: &[Value]) -> Strin
     let mut lines: Vec<String> = vec![
         format!("# Agent 会话归档 {}", s("session_id")),
         String::new(),
-        format!("- topic: `{}`", if s("topic").is_empty() { SESS_DEFAULT_TOPIC.into() } else { s("topic") }),
-        format!("- 标题: {}", if s("title").is_empty() { "-".into() } else { s("title") }),
-        format!("- 发起方: {}", if s("owner").is_empty() { "-".into() } else { s("owner") }),
+        format!(
+            "- topic: `{}`",
+            if s("topic").is_empty() {
+                SESS_DEFAULT_TOPIC.into()
+            } else {
+                s("topic")
+            }
+        ),
+        format!(
+            "- 标题: {}",
+            if s("title").is_empty() {
+                "-".into()
+            } else {
+                s("title")
+            }
+        ),
+        format!(
+            "- 发起方: {}",
+            if s("owner").is_empty() {
+                "-".into()
+            } else {
+                s("owner")
+            }
+        ),
         format!(
             "- 参与成员: {}",
             match g("members").as_array() {
@@ -1846,11 +2148,40 @@ pub fn build_session_archive_markdown(session: &Value, turns: &[Value]) -> Strin
                 _ => "-".into(),
             }
         ),
-        format!("- 状态: {}（关闭原因 {}）", s("state"), if s("close_reason").is_empty() { "-".into() } else { s("close_reason") }),
+        format!(
+            "- 状态: {}（关闭原因 {}）",
+            s("state"),
+            if s("close_reason").is_empty() {
+                "-".into()
+            } else {
+                s("close_reason")
+            }
+        ),
         format!("- 轮次: {}", g("turn_count").as_i64().unwrap_or(0)),
-        format!("- 创建: {}", if s("created_at").is_empty() { "-".into() } else { s("created_at") }),
-        format!("- 最近一轮: {}", if s("last_turn_at").is_empty() { "-".into() } else { s("last_turn_at") }),
-        format!("- 关闭: {}", if s("closed_at").is_empty() { "-".into() } else { s("closed_at") }),
+        format!(
+            "- 创建: {}",
+            if s("created_at").is_empty() {
+                "-".into()
+            } else {
+                s("created_at")
+            }
+        ),
+        format!(
+            "- 最近一轮: {}",
+            if s("last_turn_at").is_empty() {
+                "-".into()
+            } else {
+                s("last_turn_at")
+            }
+        ),
+        format!(
+            "- 关闭: {}",
+            if s("closed_at").is_empty() {
+                "-".into()
+            } else {
+                s("closed_at")
+            }
+        ),
         format!("- 归档: {}", iso_z(now_micros())),
         String::new(),
     ];
@@ -1872,7 +2203,10 @@ pub fn build_session_archive_markdown(session: &Value, turns: &[Value]) -> Strin
         let t = |k: &str| turn.get(k).cloned().unwrap_or(Value::Null);
         lines.push(format!(
             "### #{} {} {} → {} [{}]",
-            t("seq").as_i64().map(|v| v.to_string()).unwrap_or_else(|| "None".into()),
+            t("seq")
+                .as_i64()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "None".into()),
             t("ts").as_str().unwrap_or("None"),
             t("from_member").as_str().unwrap_or("-"),
             t("to_member").as_str().unwrap_or("-"),
@@ -1882,9 +2216,10 @@ pub fn build_session_archive_markdown(session: &Value, turns: &[Value]) -> Strin
         match t("content").as_str() {
             Some(c) if !c.is_empty() => lines.push(c.to_string()),
             _ => match t("content_ref").as_str() {
-                Some(r) if !r.is_empty() => {
-                    lines.push(format!("（正文已外置，见临时共享区 {}；归档文档不搬正文）", r))
-                }
+                Some(r) if !r.is_empty() => lines.push(format!(
+                    "（正文已外置，见临时共享区 {}；归档文档不搬正文）",
+                    r
+                )),
                 _ => lines.push("（正文已按归档纪律清空）".into()),
             },
         }
@@ -1901,11 +2236,11 @@ fn log_line(msg: &str) {
 
 // ================================================================ 落实事项 / 遗留问题（roundtable，只读）
 
-
 pub const AGENDA_SELECT: &str = "item_id, session_id, seq, title, expected, conclusion, \
 conclusion_entry, status, note";
 pub const CONFIRM_SELECT: &str = "confirm_id, session_id, target, member, verdict, note, ts";
-pub const ACTION_SELECT: &str = "a.action_id, a.session_id, a.agenda_seq, a.what, a.owner, a.due_at, \
+pub const ACTION_SELECT: &str =
+    "a.action_id, a.session_id, a.agenda_seq, a.what, a.owner, a.due_at, \
 a.status, a.evidence, a.note, a.created_at, a.closed_at, a.closed_by, s.topic";
 pub const ACTION_FROM: &str = " FROM roundtable_actions a \
 LEFT JOIN roundtable_sessions s ON s.session_id = a.session_id";
@@ -1934,7 +2269,10 @@ pub fn row_to_action(row: &postgres::Row, now_epoch_us: i64) -> Value {
     let status = row.get::<_, Option<String>>(6).unwrap_or_default();
     let due = ts_opt_at(row, 5);
     let overdue = is_overdue(&due, &status, &ACTION_OPEN_STATUSES, now_epoch_us);
-    let topic = row.get::<_, Option<String>>(12).map(Value::String).unwrap_or(Value::Null);
+    let topic = row
+        .get::<_, Option<String>>(12)
+        .map(Value::String)
+        .unwrap_or(Value::Null);
     json!({
         "action_id": row.get::<_, i64>(0),
         "session_id": row.get::<_, Option<String>>(1).unwrap_or_default(),
@@ -1959,12 +2297,21 @@ pub fn row_to_issue(row: &postgres::Row, now_epoch_us: i64) -> Value {
         Some(k) if ISSUE_KINDS.contains(&k) => k.to_string(),
         _ => "issue".to_string(),
     };
-    let refs_val = row.try_get::<_, Option<Value>>(8).unwrap_or(None).unwrap_or(Value::Null);
-    let ev_val = row.try_get::<_, Option<Value>>(15).unwrap_or(None).unwrap_or(Value::Null);
+    let refs_val = row
+        .try_get::<_, Option<Value>>(8)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
+    let ev_val = row
+        .try_get::<_, Option<Value>>(15)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
     let status = row.get::<_, Option<String>>(5).unwrap_or_default();
     let due = ts_opt_at(row, 6);
     let overdue = is_overdue(&due, &status, &ISSUE_OPEN_STATUSES, now_epoch_us);
-    let topic = row.get::<_, Option<String>>(13).map(Value::String).unwrap_or(Value::Null);
+    let topic = row
+        .get::<_, Option<String>>(13)
+        .map(Value::String)
+        .unwrap_or(Value::Null);
     json!({
         "issue_id": row.get::<_, i64>(0),
         "session_id": row.get::<_, Option<String>>(1).unwrap_or_default(),
@@ -2014,7 +2361,11 @@ impl BbSvc {
             where_parts.push(format!("{}.status IN ({})", col, idxs.join(", ")));
             where_parts.push(format!("{}.due_at IS NOT NULL", col));
             params.push(Box::new(iso_utc_now()));
-            where_parts.push(format!("{}.due_at < ${}::text::timestamptz", col, params.len()));
+            where_parts.push(format!(
+                "{}.due_at < ${}::text::timestamptz",
+                col,
+                params.len()
+            ));
         }
         where_parts
     }
@@ -2029,7 +2380,12 @@ impl BbSvc {
     ) -> Vec<Value> {
         let mut params: Vec<Box<dyn ToSql + Sync>> = vec![];
         let where_parts = Self::tracking_where(
-            "a", &mut params, status, owner, overdue, &ACTION_OPEN_STATUSES,
+            "a",
+            &mut params,
+            status,
+            owner,
+            overdue,
+            &ACTION_OPEN_STATUSES,
         );
         let mut sql = format!("SELECT {}{}", ACTION_SELECT, ACTION_FROM);
         if !where_parts.is_empty() {
@@ -2068,7 +2424,12 @@ impl BbSvc {
         let build = |with_kind: bool| -> (String, Vec<Box<dyn ToSql + Sync>>) {
             let mut params: Vec<Box<dyn ToSql + Sync>> = vec![];
             let mut where_parts = Self::tracking_where(
-                "i", &mut params, status, owner, overdue, &ISSUE_OPEN_STATUSES,
+                "i",
+                &mut params,
+                status,
+                owner,
+                overdue,
+                &ISSUE_OPEN_STATUSES,
             );
             if let Some(k) = kind {
                 if with_kind {
@@ -2151,7 +2512,11 @@ impl BbSvc {
             if with_due {
                 parts.push(format!("{} IS NOT NULL", due_col));
                 params.push(Box::new(iso_utc_now()));
-                parts.push(format!("{} < ${}::text::timestamptz", due_col, params.len()));
+                parts.push(format!(
+                    "{} < ${}::text::timestamptz",
+                    due_col,
+                    params.len()
+                ));
             }
             parts.join(" AND ")
         };
@@ -2178,19 +2543,37 @@ impl BbSvc {
 
     pub fn tracking_counts(&self, degraded: &mut Vec<String>) -> Value {
         let (actions_open, actions_overdue) = self.count_pair(
-            "roundtable_actions", "status", "due_at", &ACTION_OPEN_STATUSES,
-            degraded, "actions", None, None,
+            "roundtable_actions",
+            "status",
+            "due_at",
+            &ACTION_OPEN_STATUSES,
+            degraded,
+            "actions",
+            None,
+            None,
         );
         let (issues_open, issues_overdue) = self.count_pair(
-            "roundtable_issues", "status", "due_at", &ISSUE_OPEN_STATUSES,
-            degraded, "issues", None, None,
+            "roundtable_issues",
+            "status",
+            "due_at",
+            &ISSUE_OPEN_STATUSES,
+            degraded,
+            "issues",
+            None,
+            None,
         );
         let mut defects_open = None;
         let mut defects_overdue = None;
         if issues_open.is_some() {
             let (d_open, d_overdue) = self.count_pair(
-                "roundtable_issues", "status", "due_at", &ISSUE_OPEN_STATUSES,
-                degraded, "issue_kind", Some("kind"), Some(DEFECT_KIND),
+                "roundtable_issues",
+                "status",
+                "due_at",
+                &ISSUE_OPEN_STATUSES,
+                degraded,
+                "issue_kind",
+                Some("kind"),
+                Some(DEFECT_KIND),
             );
             defects_open = d_open;
             defects_overdue = d_overdue;
@@ -2224,14 +2607,13 @@ pub fn iso_utc_now_epoch_us() -> i64 {
 
 pub struct MsgFinishRow(pub i64, pub i64, pub bool, pub Option<String>);
 
-pub const SHARED_COLUMNS: &str = "content_id, scope, task_id, kind, title, body, tags, owner, audience, \
+pub const SHARED_COLUMNS: &str =
+    "content_id, scope, task_id, kind, title, body, tags, owner, audience, \
 sensitivity, status, expires_at, review_at, version, created_at, \
 updated_at, updated_by, destroyed_at, source_refs";
 pub const SHARED_TASK_COLUMNS: &str = "task_id, title, owner, status, note, created_at, ended_at, \
 ttl_at, destroyed_at";
 pub const SHARED_REVISION_COLUMNS: &str = "rev_id, content_id, action, actor, changed, note, ts";
-
-
 
 pub fn shared_is_expired(expires_at: &Value, now_epoch_us: i64) -> bool {
     match expires_at.as_str() {
@@ -2245,9 +2627,18 @@ pub fn shared_is_expired(expires_at: &Value, now_epoch_us: i64) -> bool {
 
 /// `row_to_shared`（19 列 + 可选 score=第 20 列）。
 pub fn row_to_shared(row: &postgres::Row, now_epoch_us: i64) -> Value {
-    let tags = row.try_get::<_, Option<Value>>(6).unwrap_or(None).unwrap_or(Value::Null);
-    let audience = row.try_get::<_, Option<Value>>(8).unwrap_or(None).unwrap_or(Value::Null);
-    let source_refs = row.try_get::<_, Option<Value>>(18).unwrap_or(None).unwrap_or(Value::Null);
+    let tags = row
+        .try_get::<_, Option<Value>>(6)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
+    let audience = row
+        .try_get::<_, Option<Value>>(8)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
+    let source_refs = row
+        .try_get::<_, Option<Value>>(18)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
     let status: String = row.get::<_, Option<String>>(10).unwrap_or_default();
     let expires = ts_opt_at(row, 11);
     let score: Option<Option<f64>> = row.try_get::<_, Option<f64>>(19).ok().flatten().map(Some);
@@ -2302,7 +2693,10 @@ pub fn row_to_shared_task(row: &postgres::Row, now_epoch_us: i64) -> Value {
 }
 
 pub fn row_to_shared_revision(row: &postgres::Row) -> Value {
-    let changed = row.try_get::<_, Option<Value>>(4).unwrap_or(None).unwrap_or(Value::Null);
+    let changed = row
+        .try_get::<_, Option<Value>>(4)
+        .unwrap_or(None)
+        .unwrap_or(Value::Null);
     json!({
         "rev_id": row.get::<_, i64>(0),
         "content_id": row.get::<_, i64>(1),
@@ -2380,7 +2774,9 @@ impl BbSvc {
                     .iter()
                     .map(|r| {
                         let mut v = row_to_shared(r, now_us);
-                        v.as_object_mut().unwrap().insert("score".into(), Value::Null);
+                        v.as_object_mut()
+                            .unwrap()
+                            .insert("score".into(), Value::Null);
                         v
                     })
                     .collect())
@@ -2427,7 +2823,10 @@ impl BbSvc {
             "SELECT {} FROM shared_content_revisions WHERE content_id = $1 ORDER BY ts ASC, rev_id ASC LIMIT $2",
             SHARED_REVISION_COLUMNS
         );
-        match self.store.query(&sql, &[&content_id, &SHARED_REVISION_LIMIT]) {
+        match self
+            .store
+            .query(&sql, &[&content_id, &SHARED_REVISION_LIMIT])
+        {
             Ok(rows) => Ok(rows.iter().map(row_to_shared_revision).collect()),
             Err(e) => {
                 if is_missing_schema(&e.0) {
@@ -2529,7 +2928,10 @@ mod tests {
             to_utc_epoch_us(&json!("2026-01-01T00:00:00Z")),
             Some(1767225600i64 * 1_000_000)
         );
-        assert_eq!(to_utc_epoch_us(&json!(1767225600)), Some(1767225600i64 * 1_000_000));
+        assert_eq!(
+            to_utc_epoch_us(&json!(1767225600)),
+            Some(1767225600i64 * 1_000_000)
+        );
         assert_eq!(to_utc_epoch_us(&json!(null)), None);
         assert_eq!(to_utc_epoch_us(&json!(true)), None);
     }
@@ -2620,16 +3022,41 @@ mod tests {
     #[test]
     fn overdue_semantics() {
         let now = 1767225600i64 * 1_000_000; // 2026-01-01T00:00:00Z
-        // 严格早于才算
-        assert!(is_overdue(&json!("2025-12-31T23:59:59Z"), "open", &ACTION_OPEN_STATUSES, now));
+                                             // 严格早于才算
+        assert!(is_overdue(
+            &json!("2025-12-31T23:59:59Z"),
+            "open",
+            &ACTION_OPEN_STATUSES,
+            now
+        ));
         // 正好等于不算
-        assert!(!is_overdue(&json!("2026-01-01T00:00:00Z"), "open", &ACTION_OPEN_STATUSES, now));
+        assert!(!is_overdue(
+            &json!("2026-01-01T00:00:00Z"),
+            "open",
+            &ACTION_OPEN_STATUSES,
+            now
+        ));
         // 已闭环不算
-        assert!(!is_overdue(&json!("2025-12-31T00:00:00Z"), "done", &ACTION_OPEN_STATUSES, now));
+        assert!(!is_overdue(
+            &json!("2025-12-31T00:00:00Z"),
+            "done",
+            &ACTION_OPEN_STATUSES,
+            now
+        ));
         // 没有 due_at 不算
-        assert!(!is_overdue(&json!(null), "open", &ACTION_OPEN_STATUSES, now));
+        assert!(!is_overdue(
+            &json!(null),
+            "open",
+            &ACTION_OPEN_STATUSES,
+            now
+        ));
         // 认不出的时间不算
-        assert!(!is_overdue(&json!("垃圾"), "open", &ACTION_OPEN_STATUSES, now));
+        assert!(!is_overdue(
+            &json!("垃圾"),
+            "open",
+            &ACTION_OPEN_STATUSES,
+            now
+        ));
     }
 
     // ---- shared 过期 ----

@@ -33,7 +33,12 @@ pub struct RequestError {
 
 impl RequestError {
     pub fn new(status: u16, code: &str, message: &str) -> Self {
-        RequestError { status, code: code.to_string(), message: message.to_string(), extra: vec![] }
+        RequestError {
+            status,
+            code: code.to_string(),
+            message: message.to_string(),
+            extra: vec![],
+        }
     }
     pub fn with_extra(mut self, k: &str, v: serde_json::Value) -> Self {
         self.extra.push((k.to_string(), v));
@@ -83,7 +88,10 @@ pub const BJ_OFFSET_S: i64 = 8 * 3600;
 /// `iso_bj`：epoch 秒 → ISO8601 带 +08:00，秒精度（契约所有时间的形状）。
 pub fn iso_bj(epoch_s: i64) -> String {
     let (y, mo, d, h, mi, s) = civil_from_epoch(epoch_s + BJ_OFFSET_S);
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+08:00", y, mo, d, h, mi, s)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}+08:00",
+        y, mo, d, h, mi, s
+    )
 }
 
 /// epoch → (y, m, d, h, min, s)（UTC civil 历法，Howard Hinnant 算法；task_svc 同款）。
@@ -111,7 +119,10 @@ pub fn civil_from_epoch(epoch_s: i64) -> (i64, u32, u32, u32, u32, u32) {
 }
 
 pub fn now_epoch() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 /// 宽松解析时间（落点/截止用）：ISO8601 / 'YYYY-MM-DD HH:MM(:SS)' / 'YYYY-MM-DD' / 'YYYY/MM/DD …'。
@@ -211,7 +222,11 @@ fn parse_iso8601(raw: &str) -> Option<i64> {
             // 秒可能带小数
             let sec_tok = hs[2];
             let sec_clean: String = sec_tok.chars().take_while(|c| c.is_ascii_digit()).collect();
-            s = if sec_clean.is_empty() { 0 } else { sec_clean.parse().ok()? };
+            s = if sec_clean.is_empty() {
+                0
+            } else {
+                sec_clean.parse().ok()?
+            };
         }
         if h > 23 || mi > 59 || s > 59 {
             return None;
@@ -248,7 +263,10 @@ fn parse_tz(tz: &str) -> Option<i64> {
     let body = tz.strip_prefix(['+', '-'])?;
     let parts: Vec<&str> = body.split(':').collect();
     let h: i64 = parts.first()?.trim().parse().ok()?;
-    let m: i64 = parts.get(1).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+    let m: i64 = parts
+        .get(1)
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(0);
     Some(sign * (h * 3600 + m * 60))
 }
 

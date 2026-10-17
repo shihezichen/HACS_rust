@@ -34,7 +34,10 @@ fn main() {
             "--timeout" => timeout = args.next().and_then(|v| v.parse().ok()).unwrap_or(120.0),
             "--nats-host" => host = args.next(),
             "--nats-port" => {
-                port = args.next().and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_PORT)
+                port = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(DEFAULT_PORT)
             }
             "--user" => user = args.next().unwrap_or_default(),
             "--password-file" => password_file = args.next().unwrap_or_default(),
@@ -104,11 +107,7 @@ fn main() {
     }
 
     let t0 = Instant::now();
-    let reply = client.request(
-        &subject,
-        raw.as_bytes(),
-        Duration::from_secs_f64(t + 10.0),
-    );
+    let reply = client.request(&subject, raw.as_bytes(), Duration::from_secs_f64(t + 10.0));
     let elapsed = (t0.elapsed().as_secs_f64() * 10.0).round() / 10.0;
     client.close();
 

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use hacs_l1_transport::nats_client as nats;
 use hacs_l1_transport::team_tools::{
-    build_call_payload, broadcast_summary, clamp_call_timeout, MemberOutcome,
+    broadcast_summary, build_call_payload, clamp_call_timeout, MemberOutcome,
 };
 use serde_json::json;
 
@@ -47,14 +47,15 @@ fn main() {
             "--session-id" => session_id = args.next(),
             "--nats-host" => host = args.next(),
             "--nats-port" => {
-                port = args.next().and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_PORT)
+                port = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(DEFAULT_PORT)
             }
             "--user" => user = args.next().unwrap_or_default(),
             "--password-file" => password_file = args.next().unwrap_or_default(),
             "--timeout" => timeout = args.next().and_then(|v| v.parse().ok()).unwrap_or(120.0),
-            "--concurrency" => {
-                concurrency = args.next().and_then(|v| v.parse().ok()).unwrap_or(3)
-            }
+            "--concurrency" => concurrency = args.next().and_then(|v| v.parse().ok()).unwrap_or(3),
             "--roster-seconds" => {
                 roster_seconds = args.next().and_then(|v| v.parse().ok()).unwrap_or(40.0)
             }
@@ -144,10 +145,7 @@ fn main() {
             .filter(|m| !excluded.contains(m))
             .collect();
         if found.is_empty() {
-            eprintln!(
-                "窗口 {:.0}s 内没有扫到任何在线成员",
-                roster_seconds
-            );
+            eprintln!("窗口 {:.0}s 内没有扫到任何在线成员", roster_seconds);
             std::process::exit(3);
         }
         found
@@ -221,7 +219,12 @@ fn main() {
         println!("{}", r.summary_line());
     }
     let ok_count = results.iter().filter(|r| r.ok).count();
-    println!("汇总：{}/{} 回应，用时 {:.1}s", ok_count, members.len(), total_elapsed);
+    println!(
+        "汇总：{}/{} 回应，用时 {:.1}s",
+        ok_count,
+        members.len(),
+        total_elapsed
+    );
 
     let summary = broadcast_summary(&subject, &results, members.len(), no_wait, total_elapsed);
     if json_out {
@@ -314,9 +317,7 @@ fn call_one_nowait(
             .unwrap_or_else(|_| nats::NatsConfig::from_hosts_str("127.0.0.1", port).unwrap())
             .with_credentials(Some(user.to_string()), Some(password.to_string())),
     );
-    let sent = client
-        .connect()
-        .is_ok()
+    let sent = client.connect().is_ok()
         && client
             .publish(&format!("a2a.v1.req.{member}"), raw.as_bytes(), "")
             .is_ok()

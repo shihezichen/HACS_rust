@@ -31,11 +31,44 @@ pub fn mention_tokens(text: &str) -> Vec<String> {
         while j < bytes.len() {
             let ch = text[j..].chars().next().unwrap();
             if ch.is_whitespace()
-                || matches!(ch,
-                    '@' | '，' | '。' | '！' | '？' | '；' | '：' | '、' | ',' | '.'
-                    | '!' | '?' | ';' | ':' | '"' | '\'' | '“' | '”' | '‘' | '’'
-                    | '（' | '）' | '(' | ')' | '[' | ']' | '【' | '】' | '{' | '}'
-                    | '《' | '》' | '<' | '>' | '·' | '…')
+                || matches!(
+                    ch,
+                    '@' | '，'
+                        | '。'
+                        | '！'
+                        | '？'
+                        | '；'
+                        | '：'
+                        | '、'
+                        | ','
+                        | '.'
+                        | '!'
+                        | '?'
+                        | ';'
+                        | ':'
+                        | '"'
+                        | '\''
+                        | '“'
+                        | '”'
+                        | '‘'
+                        | '’'
+                        | '（'
+                        | '）'
+                        | '('
+                        | ')'
+                        | '['
+                        | ']'
+                        | '【'
+                        | '】'
+                        | '{'
+                        | '}'
+                        | '《'
+                        | '》'
+                        | '<'
+                        | '>'
+                        | '·'
+                        | '…'
+                )
             {
                 break;
             }
@@ -55,10 +88,35 @@ pub fn mention_tokens(text: &str) -> Vec<String> {
 fn rstrip_trailing(token: &str) -> String {
     token
         .trim_end_matches(|ch| {
-            matches!(ch,
-                '，' | '。' | '！' | '？' | '；' | '：' | '、' | ',' | '.' | '!' | '?'
-                | ';' | ':' | '"' | '\'' | '“' | '”' | '‘' | '’' | '）' | ')' | '】'
-                | ']' | '}' | '>' | '》' | '…')
+            matches!(
+                ch,
+                '，' | '。'
+                    | '！'
+                    | '？'
+                    | '；'
+                    | '：'
+                    | '、'
+                    | ','
+                    | '.'
+                    | '!'
+                    | '?'
+                    | ';'
+                    | ':'
+                    | '"'
+                    | '\''
+                    | '“'
+                    | '”'
+                    | '‘'
+                    | '’'
+                    | '）'
+                    | ')'
+                    | '】'
+                    | ']'
+                    | '}'
+                    | '>'
+                    | '》'
+                    | '…'
+            )
         })
         .to_string()
 }
@@ -140,17 +198,32 @@ mod tests {
     #[test]
     fn test_exact_and_alias() {
         let members = m(&["hermes", "atlas"]);
-        assert_eq!(parse_text_mentions("@hermes 看看", &members), vec!["hermes".to_string()]);
-        assert_eq!(parse_text_mentions("@所有人 收", &members), vec!["@all".to_string()]);
-        assert_eq!(parse_text_mentions("@all 收", &members), vec!["@all".to_string()]);
-        assert_eq!(parse_text_mentions("@全员", &members), vec!["@all".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@hermes 看看", &members),
+            vec!["hermes".to_string()]
+        );
+        assert_eq!(
+            parse_text_mentions("@所有人 收", &members),
+            vec!["@all".to_string()]
+        );
+        assert_eq!(
+            parse_text_mentions("@all 收", &members),
+            vec!["@all".to_string()]
+        );
+        assert_eq!(
+            parse_text_mentions("@全员", &members),
+            vec!["@all".to_string()]
+        );
     }
 
     #[test]
     fn test_punctuation_cut() {
         // 中文不写空格：@hermes，你好 必须截出 hermes（实踩口径）
         let members = m(&["hermes"]);
-        assert_eq!(parse_text_mentions("@hermes，你好", &members), vec!["hermes".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@hermes，你好", &members),
+            vec!["hermes".to_string()]
+        );
     }
 
     #[test]
@@ -162,10 +235,16 @@ mod tests {
     #[test]
     fn test_case_insensitive_unique() {
         let members = m(&["Hermes"]);
-        assert_eq!(parse_text_mentions("@hermes 你好", &members), vec!["Hermes".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@hermes 你好", &members),
+            vec!["Hermes".to_string()]
+        );
         // 精确命中优先（真有个成员叫 hermes 就不吃亏）；歧义只影响大小写回退路径
         let members = m(&["Hermes", "hermes"]);
-        assert_eq!(parse_text_mentions("@hermes 你好", &members), vec!["hermes".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@hermes 你好", &members),
+            vec!["hermes".to_string()]
+        );
         // 大小写回退在有歧义时认不出「HERMES」
         assert!(parse_text_mentions("@HERMES 你好", &members).is_empty());
     }
@@ -174,7 +253,10 @@ mod tests {
     fn test_cjk_glued() {
         // @Hermes你好 → 前缀回退认 Hermes
         let members = m(&["Hermes"]);
-        assert_eq!(parse_text_mentions("@Hermes你好", &members), vec!["Hermes".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@Hermes你好", &members),
+            vec!["Hermes".to_string()]
+        );
         // 英文黏连不算点名
         let members = m(&["hermes"]);
         assert!(parse_text_mentions("@hermesabc", &members).is_empty());
@@ -183,7 +265,10 @@ mod tests {
     #[test]
     fn test_dedupe_and_unknown() {
         let members = m(&["hermes"]);
-        assert_eq!(parse_text_mentions("@hermes @hermes", &members), vec!["hermes".to_string()]);
+        assert_eq!(
+            parse_text_mentions("@hermes @hermes", &members),
+            vec!["hermes".to_string()]
+        );
         assert!(parse_text_mentions("@ghost 你好", &members).is_empty());
     }
 }

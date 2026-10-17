@@ -28,7 +28,7 @@
 P0  骨架                 ✅ 完成
 P1  L2 适配层            ✅ 完成（cli_backend 已落地，含 hacs-c 第一个 [[bin]]）
 P2  L1 其余件            ✅ 完成（teamd / a2a_edge(a2a_svc) / team_roster / team_call / team_broadcast / a2a_call 全落地）
-P3  L3 重服务（收益最大）  ✅ task_svc + chat_svc + blackboard_svc 已落地（blackboard_view 待做）
+P3  L3 重服务（收益最大）  ✅ task_svc + chat_svc + blackboard_svc + blackboard_view 全落地
 P4  L3 其余件 + X 其余面  ⏳ 未开始
 P5  L4 + C 收口 + 部署件   ⏳ 未开始
 ```
@@ -179,7 +179,7 @@ Linux 节点（`lobster` / `top001` / `quantum`）上直接 `cargo build --relea
 | `blackboard_view` | 9941 / 9942 | 3296 |
 | `task_svc` | 9981 | 871 | ✅ 已完成 |
 
-> ⚠️ `blackboard_view` 落地前**必须先把 `X` 的会话令牌 / 角色密级 / 时间口径补齐**
+> ✅ `blackboard_view` 已落地：X 层 `hacs-x-identity::view_auth`（会话令牌 / 角色密级 / scrypt 口令散列 / 时间口径）先行补齐（15 单测），L3 + bin（9941）随后（E2E 全链路通过，内存对比 Python 32,240 kB → Rust 3,504 kB，~9.2×）
 > （见已知偏差 10）。`chat_svc` 依赖 `agent_model`（已就绪）与 `view_auth`（未就绪）。
 
 ### 6.4 建议先建的公共设施：`hacs-parity` 对照装置

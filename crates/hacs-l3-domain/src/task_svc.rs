@@ -75,7 +75,12 @@ pub fn parse_iso(s: &str) -> Option<i64> {
     let h = num(11, 13)?;
     let mi = num(14, 16)?;
     let se = num(17, 19)?;
-    if !(b[4] == b'-' && b[7] == b'-' && (b[10] == b'T' || b[10] == b' ') && b[13] == b':' && b[16] == b':') {
+    if !(b[4] == b'-'
+        && b[7] == b'-'
+        && (b[10] == b'T' || b[10] == b' ')
+        && b[13] == b':'
+        && b[16] == b':')
+    {
         return None;
     }
     let mut secs = days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + se;
@@ -128,7 +133,10 @@ pub fn est_tokens(text: &str) -> i64 {
     let mut cjk = 0i64;
     for ch in text.chars() {
         let o = ch as u32;
-        if (0x2E80..=0x9FFF).contains(&o) || (0xF900..=0xFAFF).contains(&o) || (0xFF00..=0xFFEF).contains(&o) {
+        if (0x2E80..=0x9FFF).contains(&o)
+            || (0xF900..=0xFAFF).contains(&o)
+            || (0xFF00..=0xFFEF).contains(&o)
+        {
             cjk += 1;
         }
     }
@@ -166,21 +174,32 @@ pub fn clip_digest(text: &str, max_token: i64) -> String {
 
 /// Python `str.isspace()` 单字符语义（与 L2 cli_backend 同一套：`\x07`→false、`\x1c`→true）。
 fn char_is_py_space(c: char) -> bool {
-    matches!(c, '\t' | '\n' | '\x0b' | '\x0c' | '\r' | '\x1c'..='\x1f' | ' ' | '\u{85}' | '\u{a0}')
-        || (c.is_whitespace() && c != '\u{0b}')
+    matches!(
+        c,
+        '\t' | '\n' | '\x0b' | '\x0c' | '\r' | '\x1c'..='\x1f' | ' ' | '\u{85}' | '\u{a0}'
+    ) || (c.is_whitespace() && c != '\u{0b}')
         || matches!(c, '\u{1c}'..='\u{1f}' | '\u{85}')
 }
 
 // ------------------------------------------------------------------ 回帖文案
 /// 回帖正文：任务标题 / 结果摘要 / 执行 Agent 名（口径：群 #340）。
-pub fn build_reply_text(task: &Value, agent: &str, result: Option<&str>, note: Option<&str>) -> String {
+pub fn build_reply_text(
+    task: &Value,
+    agent: &str,
+    result: Option<&str>,
+    note: Option<&str>,
+) -> String {
     let title = task
         .get("title")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim()
         .to_string();
-    let title = if title.is_empty() { "(无标题)".to_string() } else { title };
+    let title = if title.is_empty() {
+        "(无标题)".to_string()
+    } else {
+        title
+    };
     let seq = task
         .get("msg_seq")
         .and_then(|v| v.as_str())
@@ -401,15 +420,34 @@ impl Store {
                  origin_task_id,context_digest,groups,fallback,lease_s,hold) \
                  VALUES(?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?)",
                 rusqlite::params![
-                    tid, group_id, msg_seq, proposer, ts, title, content, owner, priority,
-                    status, ts, chain_id, kind, idem_key, origin_task_id, context_digest,
-                    groups, fallback, lease_s, hold,
+                    tid,
+                    group_id,
+                    msg_seq,
+                    proposer,
+                    ts,
+                    title,
+                    content,
+                    owner,
+                    priority,
+                    status,
+                    ts,
+                    chain_id,
+                    kind,
+                    idem_key,
+                    origin_task_id,
+                    context_digest,
+                    groups,
+                    fallback,
+                    lease_s,
+                    hold,
                 ],
             )
         });
         match ins {
             Ok(_) => Ok(self.get(&tid).unwrap_or(Value::Null)),
-            Err(rusqlite::Error::SqliteFailure(e, _)) if e.code == rusqlite::ErrorCode::ConstraintViolation => {
+            Err(rusqlite::Error::SqliteFailure(e, _))
+                if e.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
                 // 并发下唯一索引兜底：别人刚插进去，返回既有那条。
                 match idem_key.and_then(|k| self.idem_hit(k)) {
                     Some(prev) => Ok(prev),
@@ -546,11 +584,15 @@ impl Store {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
-        let exp = t.get("lease_expire_at").and_then(|v| v.as_str()).map(str::to_string);
+        let exp = t
+            .get("lease_expire_at")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let mut active = false;
-        if let (Some(tok), Some(e)) =
-            (t.get("lease_token").and_then(|v| v.as_str()), exp.as_deref())
-        {
+        if let (Some(tok), Some(e)) = (
+            t.get("lease_token").and_then(|v| v.as_str()),
+            exp.as_deref(),
+        ) {
             if !tok.is_empty() {
                 active = parse_iso(e).map(|es| es > cur_secs).unwrap_or(false);
             }
@@ -608,7 +650,10 @@ impl Store {
             let Some(tid) = row.get("id").and_then(|v| v.as_str()).map(str::to_string) else {
                 continue;
             };
-            let dc = row.get("dispatch_count").and_then(|v| v.as_i64()).unwrap_or(0);
+            let dc = row
+                .get("dispatch_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
             let chain_id = row
                 .get("chain_id")
                 .and_then(|v| v.as_str())
@@ -665,7 +710,13 @@ impl Store {
     /// report 成功后按 idem_key 派一条**最小 reply 任务**。
     /// 硬口径：idem_key = "reply:" + origin_task_id；**只派任务，不生成任何回答正文**
     /// （content 恒为 None，本函数没有任何产出回答文本的分支）。
-    pub fn dispatch_reply(&self, origin: &Value, report_agent: Option<&str>, note: Option<&str>, result: Option<&str>) -> Value {
+    pub fn dispatch_reply(
+        &self,
+        origin: &Value,
+        report_agent: Option<&str>,
+        note: Option<&str>,
+        result: Option<&str>,
+    ) -> Value {
         let Some(oid) = origin.get("id").and_then(|v| v.as_str()) else {
             return json!({"ok": false, "error": "no_origin"});
         };
@@ -690,8 +741,14 @@ impl Store {
             &format!(
                 "任务:{}\n标题:{}\n内容:{}\n上报Agent:{}\n上报结果:{}\n备注:{}",
                 oid,
-                trunc_chars(origin.get("title").and_then(|v| v.as_str()).unwrap_or(""), 200),
-                trunc_chars(origin.get("content").and_then(|v| v.as_str()).unwrap_or(""), 1200),
+                trunc_chars(
+                    origin.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                    200
+                ),
+                trunc_chars(
+                    origin.get("content").and_then(|v| v.as_str()).unwrap_or(""),
+                    1200
+                ),
                 report_agent.unwrap_or(""),
                 result.unwrap_or(""),
                 note.unwrap_or(""),
@@ -699,8 +756,14 @@ impl Store {
             CONTEXT_DIGEST_MAX_TOKEN,
         );
         let title_orig = origin.get("title").and_then(|v| v.as_str()).unwrap_or(oid);
-        let title = format!("【reply·待原 Owner 自行作答】{}", trunc_chars(title_orig, 80));
-        let group_id = origin.get("group_id").and_then(|v| v.as_str()).unwrap_or("");
+        let title = format!(
+            "【reply·待原 Owner 自行作答】{}",
+            trunc_chars(title_orig, 80)
+        );
+        let group_id = origin
+            .get("group_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let fb = serde_json::to_string(&reply_fallback()).unwrap_or_default();
         let r = self.create(
             group_id,
@@ -725,11 +788,23 @@ impl Store {
         let Ok(r) = r else {
             return json!({"ok": false, "error": r.unwrap_err()});
         };
-        let already = r.get("idem_key_hit").and_then(|v| v.as_bool()).unwrap_or(false);
+        let already = r
+            .get("idem_key_hit")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let mut reply_task = Map::new();
         for k in [
-            "id", "group_id", "kind", "idem_key", "origin_task_id", "owner", "status",
-            "lease_s", "fallback", "context_digest", "groups",
+            "id",
+            "group_id",
+            "kind",
+            "idem_key",
+            "origin_task_id",
+            "owner",
+            "status",
+            "lease_s",
+            "fallback",
+            "context_digest",
+            "groups",
         ] {
             reply_task.insert(k.to_string(), r.get(k).cloned().unwrap_or(Value::Null));
         }
@@ -780,7 +855,10 @@ impl Store {
         if !sets.is_empty() {
             let sql = format!(
                 "UPDATE tasks SET {}, updated_at=?{} WHERE id=?{}",
-                sets.iter().map(|k| format!("{k}=?")).collect::<Vec<_>>().join(","),
+                sets.iter()
+                    .map(|k| format!("{k}=?"))
+                    .collect::<Vec<_>>()
+                    .join(","),
                 sets.len() + 1,
                 sets.len() + 2,
             );
@@ -827,7 +905,8 @@ impl Store {
             if let Some(row) = self.reply_get(tid) {
                 if row.get("status").and_then(|v| v.as_str()) != Some("posted") {
                     if let Some(mut o) = out {
-                        let delivered = self.reply_deliver(tid, chat_base, agent_fallback, retry_max);
+                        let delivered =
+                            self.reply_deliver(tid, chat_base, agent_fallback, retry_max);
                         if let Some(m) = o.as_object_mut() {
                             m.insert("reply".into(), delivered);
                         }
@@ -894,11 +973,12 @@ impl Store {
                     "first_report": {"agent": pagent, "result": presult, "at": pat},
                 });
             }
-            let st = if result.is_empty() || result == "done" || result == "success" || result == "ok" {
-                "done"
-            } else {
-                "failed"
-            };
+            let st =
+                if result.is_empty() || result == "done" || result == "success" || result == "ok" {
+                    "done"
+                } else {
+                    "failed"
+                };
             let _ = conn.execute(
                 "INSERT INTO task_reports(task_id,agent,result,note,created_at) VALUES(?1,?2,?3,?4,?5)",
                 rusqlite::params![tid, agent, result, note, now_iso()],
@@ -916,7 +996,12 @@ impl Store {
                             "INSERT INTO chain_freezes(chain_id,reason,frozen_at,frozen_by) \
                              VALUES(?1,?2,?3,?4) ON CONFLICT(chain_id) DO UPDATE SET \
                              reason=COALESCE(excluded.reason,reason)",
-                            rusqlite::params![c, format!("report_failed task={tid}"), now_iso(), agent],
+                            rusqlite::params![
+                                c,
+                                format!("report_failed task={tid}"),
+                                now_iso(),
+                                agent
+                            ],
                         );
                     }
                 }
@@ -939,7 +1024,13 @@ impl Store {
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO task_replies(task_id,group_id,agent,text,status,\
                      attempts,created_at,updated_at) VALUES(?1,?2,?3,?4,'pending',0,?5,?5)",
-                    rusqlite::params![tid, t.get("group_id").and_then(|v| v.as_str()), reply_agent, text, now_iso()],
+                    rusqlite::params![
+                        tid,
+                        t.get("group_id").and_then(|v| v.as_str()),
+                        reply_agent,
+                        text,
+                        now_iso()
+                    ],
                 );
             }
         }
@@ -998,7 +1089,8 @@ impl Store {
         let group = row.get("group_id").and_then(|v| v.as_str()).unwrap_or("");
         let agent = row.get("agent").and_then(|v| v.as_str()).unwrap_or("");
         let text = row.get("text").and_then(|v| v.as_str()).unwrap_or("");
-        let (ok, info) = crate::task_svc_chat::chat_post_message(group, agent, text, chat_base, None);
+        let (ok, info) =
+            crate::task_svc_chat::chat_post_message(group, agent, text, chat_base, None);
         if ok {
             let r = self.reply_mark(
                 tid,
@@ -1014,7 +1106,11 @@ impl Store {
             });
         }
         let attempts = row.get("attempts").and_then(|v| v.as_i64()).unwrap_or(0);
-        let status = if attempts + 1 < retry_max { "failed" } else { "dead" };
+        let status = if attempts + 1 < retry_max {
+            "failed"
+        } else {
+            "dead"
+        };
         let r = self.reply_mark(
             tid,
             status,
@@ -1071,7 +1167,10 @@ impl Store {
                  GROUP BY group_id, status",
                 &[&g],
             ),
-            None => self.rows("SELECT group_id, status, COUNT(*) n FROM tasks GROUP BY group_id, status", &[]),
+            None => self.rows(
+                "SELECT group_id, status, COUNT(*) n FROM tasks GROUP BY group_id, status",
+                &[],
+            ),
         }
     }
 
@@ -1079,7 +1178,11 @@ impl Store {
         let mut gs: Vec<String> = self
             .stats(None)
             .iter()
-            .filter_map(|r| r.get("group_id").and_then(|v| v.as_str()).map(str::to_string))
+            .filter_map(|r| {
+                r.get("group_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
             .collect();
         gs.sort();
         gs.dedup();
@@ -1146,14 +1249,22 @@ mod tests {
         let dir = std::env::temp_dir().join(format!(
             "tsvc_test_{}_{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
         Store::open(&dir.join("t.db").to_string_lossy()).unwrap()
     }
 
     fn mk(store: &Store, group: &str, title: &str) -> Value {
-        store.create(group, title, None, None, "normal", None, None, "pending", None, None, None, None, None, None, None, None, None, 0).unwrap()
+        store
+            .create(
+                group, title, None, None, "normal", None, None, "pending", None, None, None, None,
+                None, None, None, None, None, 0,
+            )
+            .unwrap()
     }
 
     #[test]
@@ -1177,7 +1288,7 @@ mod tests {
         // 其他 4 字符 1 token
         assert_eq!(est_tokens("abcd"), 1);
         assert_eq!(est_tokens("abcde"), 2); // (5+3)/4
-        // 混合
+                                            // 混合
         assert_eq!(est_tokens("你好ab"), 3); // 2 + (2+3)/4=1
     }
 
@@ -1213,11 +1324,20 @@ mod tests {
     fn create_list_next_report_flow() {
         let s = store();
         let t = mk(&s, "g1", "任务一");
-        assert!(t.get("id").and_then(|v| v.as_str()).unwrap().starts_with("T-"));
+        assert!(t
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .starts_with("T-"));
         assert_eq!(t.get("status").and_then(|v| v.as_str()), Some("pending"));
         // 队列：special 优先
         mk(&s, "g1", "普通");
-        let _sp = s.create("g1", "加急", None, None, "special", None, None, "pending", None, None, None, None, None, None, None, None, None, 0).unwrap();
+        let _sp = s
+            .create(
+                "g1", "加急", None, None, "special", None, None, "pending", None, None, None, None,
+                None, None, None, None, None, 0,
+            )
+            .unwrap();
         let nx = s.next_for("g1", "a1").unwrap();
         assert_eq!(nx.get("title").and_then(|v| v.as_str()), Some("加急"));
         assert_eq!(nx.get("status").and_then(|v| v.as_str()), Some("running"));
@@ -1227,8 +1347,14 @@ mod tests {
         assert_eq!(r1.get("already_reported"), Some(&json!(false)));
         let r2 = s.report(&tid, Some("a1"), "failed", None, None);
         assert_eq!(r2.get("already_reported"), Some(&json!(true)));
-        assert_eq!(r2.get("first_report").and_then(|v| v.get("result")), Some(&json!("done")));
-        assert_eq!(s.get(&tid).unwrap().get("status").and_then(|v| v.as_str()), Some("done"));
+        assert_eq!(
+            r2.get("first_report").and_then(|v| v.get("result")),
+            Some(&json!("done"))
+        );
+        assert_eq!(
+            s.get(&tid).unwrap().get("status").and_then(|v| v.as_str()),
+            Some("done")
+        );
     }
 
     #[test]
@@ -1243,11 +1369,18 @@ mod tests {
         // 正常 ack
         let r = s.ack(&tid, "a1", Some(120), 120, &wl);
         assert_eq!(r.get("ok"), Some(&json!(true)));
-        let tok = r.get("lease_token").and_then(|v| v.as_str()).unwrap().to_string();
+        let tok = r
+            .get("lease_token")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .to_string();
         // 重复 ack 同 token
         let r2 = s.ack(&tid, "a1", Some(120), 120, &wl);
         assert_eq!(r2.get("already_acked"), Some(&json!(true)));
-        assert_eq!(r2.get("lease_token").and_then(|v| v.as_str()), Some(tok.as_str()));
+        assert_eq!(
+            r2.get("lease_token").and_then(|v| v.as_str()),
+            Some(tok.as_str())
+        );
         // 他人 ack → leased_by_other
         let wl3 = vec!["a1".to_string(), "a3".to_string()];
         let r3 = s.ack(&tid, "a3", Some(120), 120, &wl3);
@@ -1257,7 +1390,28 @@ mod tests {
         assert_eq!(r.get("chain_frozen"), Some(&json!(true)));
         assert!(!s.freeze_list().is_empty());
         // 同 chain 不再派发
-        let _t2 = s.create("g1", "后续", None, None, "normal", None, None, "pending", None, Some("chain-x"), None, None, None, None, None, None, None, 0).unwrap();
+        let _t2 = s
+            .create(
+                "g1",
+                "后续",
+                None,
+                None,
+                "normal",
+                None,
+                None,
+                "pending",
+                None,
+                Some("chain-x"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            )
+            .unwrap();
         assert!(s.next_for("g1", "a1").is_none());
         // 解冻后可派
         assert!(s.unfreeze_chain("chain-x"));
@@ -1273,17 +1427,35 @@ mod tests {
         for _ in 0..3 {
             s.ack(&tid, "a1", Some(120), 120, &wl);
             // 把 lease_expire_at 改成过去，模拟超时
-            s.with(|c| c.execute("UPDATE tasks SET lease_expire_at='2000-01-01T00:00:00+08:00' WHERE id=?1", rusqlite::params![tid])).unwrap();
+            s.with(|c| {
+                c.execute(
+                    "UPDATE tasks SET lease_expire_at='2000-01-01T00:00:00+08:00' WHERE id=?1",
+                    rusqlite::params![tid],
+                )
+            })
+            .unwrap();
             let out = s.reap_leases(3);
             // 前 2 次 requeued（dispatch_count 1,2,3 里前两轮 <3）
-            let action = out[0].get("action").and_then(|v| v.as_str()).unwrap().to_string();
-            if out[0].get("dispatch_count").and_then(|v| v.as_i64()).unwrap() >= 3 {
+            let action = out[0]
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .to_string();
+            if out[0]
+                .get("dispatch_count")
+                .and_then(|v| v.as_i64())
+                .unwrap()
+                >= 3
+            {
                 assert_eq!(action, "failed_and_frozen");
             } else {
                 assert_eq!(action, "requeued");
             }
         }
-        assert_eq!(s.get(&tid).unwrap().get("status").and_then(|v| v.as_str()), Some("failed"));
+        assert_eq!(
+            s.get(&tid).unwrap().get("status").and_then(|v| v.as_str()),
+            Some("failed")
+        );
     }
 
     #[test]
@@ -1296,7 +1468,10 @@ mod tests {
         assert_eq!(d.get("ok"), Some(&json!(true)));
         let rt = d.get("reply_task").unwrap();
         assert_eq!(rt.get("kind"), Some(&json!("reply")));
-        assert_eq!(rt.get("idem_key").and_then(|v| v.as_str()), Some(format!("reply:{tid}").as_str()));
+        assert_eq!(
+            rt.get("idem_key").and_then(|v| v.as_str()),
+            Some(format!("reply:{tid}").as_str())
+        );
         assert!(rt.get("content").is_none() || rt.get("content").unwrap().is_null()); // 禁止代写
         assert_eq!(rt.get("lease_s"), Some(&json!(120)));
         // digest ≤800 token
@@ -1316,11 +1491,16 @@ mod tests {
         let s = store();
         let t = mk(&s, "g1", "活");
         let tid = t.get("id").and_then(|v| v.as_str()).unwrap().to_string();
-        let out = s.patch(&tid, &json!({"status": "done"}), false, &[], "", "", 20).unwrap().unwrap();
+        let out = s
+            .patch(&tid, &json!({"status": "done"}), false, &[], "", "", 20)
+            .unwrap()
+            .unwrap();
         // PATCH 路径补齐回帖（#418-1）
         assert!(out.get("reply").is_some());
         // 再 patch 到 failed → 不再重复（PK 幂等闸门：INSERT OR IGNORE）
-        let _ = s.patch(&tid, &json!({"status": "failed"}), false, &[], "", "", 20).unwrap();
+        let _ = s
+            .patch(&tid, &json!({"status": "failed"}), false, &[], "", "", 20)
+            .unwrap();
         let pending = s.reply_pending(20, 100);
         assert_eq!(pending.len(), 1);
     }
@@ -1364,7 +1544,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!(
             "tsvc_legacy_{}_{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("old.db");
@@ -1376,7 +1559,8 @@ mod tests {
                  owner TEXT, priority TEXT NOT NULL DEFAULT 'normal',
                  status TEXT NOT NULL DEFAULT 'pending',
                  dispatch_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);",
-            ).unwrap();
+            )
+            .unwrap();
         }
         let s = Store::open(&path.to_string_lossy()).unwrap();
         let cols = s.table_columns();

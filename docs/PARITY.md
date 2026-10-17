@@ -186,3 +186,22 @@
 40. **`blackboard_svc` msg_log sweep 的 stalled 常量**：Python 把 MSG_STALL_AFTER_S 直接
     拼进 last_error 文案（f-string）；Rust 同样编译期常量拼 SQL 文本（make_interval 的
     秒数用字面量 `{N}.0`），行为一致。
+
+41. **`blackboard_view` X 层 scrypt 双端自实现（本轮修出两处 RFC 7914 偏差）**：
+    ① Integerify(X) 是最后 64 字节子块前 8 字节按**小端** u64（原用大端 word 取模）；
+    ② B 块按 32 位**小端** words 解释（原用大端装载）——真实参数 N=16384, r=8 下
+    与 Python `hashlib.scrypt` 校验值一致后全链路（登录/改密/锁定）E2E 通过。
+    测试参数（n 小、r=1）发现不了这两个 bug——教训：交叉验证必须用生产参数。
+42. **`blackboard_view` 移植完成（1.5 对齐）**：X 层 `hacs-x-identity::view_auth`
+    （sha256/hmac/scrypt/token/CSRF/LockTracker，15 单测）+ L3 `blackboard_view.rs`
+    （ViewStore PG view_* 表 + Auth 门面 + 遮罩 apply_role，6 单测）+ bin（~1700 行，
+    端口 9941）：portal/board/healthz/favicon/api/*（透传 502 收敛 + 404 例外）/
+    POST /login 唯一写口（login/passwd/logout 三动作 + CSRF）/GET /account。
+    E2E：登录/错口令/登录锁（5 败锁 15 分钟，含 view_login_failures append-only
+    触发器）、会话 cookie、userbar、改密→全会话作废→新口令重登、退出、405 只读。
+43. **`blackboard_view` 内存对比（P3 收益实测）**：同一 PG 实例各 120 轮预热后：
+    Python 3.11 VmRSS 32,240 kB（Pss 18,089）；Rust release VmRSS 3,504 kB（Pss 1,606）。
+    **RSS 降至 Python 的 ~10.9%（省 ~89%）**。
+44. **`blackboard_view` 路由闭包与 auth_gate 的 visitor 双解析**：Python 在 do_GET
+    解析一次 visitor；Rust 网关 auth 钩子与路由闭包是两个 Ctx 对象，各解析一次
+    （多一次会话查库），语义等价——auth 门禁仍以 gate 结果为准。

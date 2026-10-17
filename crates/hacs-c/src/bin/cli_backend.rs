@@ -50,10 +50,7 @@ impl MemberGate {
             if now >= deadline {
                 return None;
             }
-            let (guard, _timeout) = self
-                .cv
-                .wait_timeout(inner, deadline - now)
-                .unwrap();
+            let (guard, _timeout) = self.cv.wait_timeout(inner, deadline - now).unwrap();
             inner = guard;
         }
         inner.locked = true;
@@ -268,7 +265,13 @@ unsafe fn setsid_call() -> i32 {
 
 // ---------------------------------------------------------------- 成员执行
 
-fn run_piagent(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Option<&str>, timeout_s: f64) -> CliResult {
+fn run_piagent(
+    rt: &Runtime,
+    prompt: &str,
+    cli_model: &str,
+    session_key: Option<&str>,
+    timeout_s: f64,
+) -> CliResult {
     if let Some(prefix) = &rt.pi_cmd {
         // 测试注入的假 CLI：前缀 + 任务
         let mut argv = prefix.clone();
@@ -295,7 +298,13 @@ fn run_piagent(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Option<
     run_cli(&argv, Some(&rt.pi_workdir), timeout_s)
 }
 
-fn run_claudecode(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Option<&str>, timeout_s: f64) -> CliResult {
+fn run_claudecode(
+    rt: &Runtime,
+    prompt: &str,
+    cli_model: &str,
+    session_key: Option<&str>,
+    timeout_s: f64,
+) -> CliResult {
     if let Some(prefix) = &rt.claude_cmd {
         let mut argv = prefix.clone();
         argv.push(prompt.to_string());
@@ -333,7 +342,11 @@ fn run_claudecode(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Opti
         if let Some(s) = sid {
             // 必须写成 --opt=value 的**单 token**（分两个 token 会被 claude_exec
             // 的 argparse 把值吃掉 —— 实测报 "argument missing"）。
-            argv.push(format!("--{}={}", if resume { "resume" } else { "session-id" }, s));
+            argv.push(format!(
+                "--{}={}",
+                if resume { "resume" } else { "session-id" },
+                s
+            ));
         }
         argv
     };
@@ -343,7 +356,11 @@ fn run_claudecode(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Opti
     if let Some(s) = &sid {
         resume = rt.sessions.claude_seen_or_add(s);
     }
-    let mut res = run_cli(&build(resume, sid.as_deref()), Some(&rt.claude_workdir), timeout_s);
+    let mut res = run_cli(
+        &build(resume, sid.as_deref()),
+        Some(&rt.claude_workdir),
+        timeout_s,
+    );
     // --session-id 撞上「已存在」→ 自动改 --resume 重试一次
     if let Some(s) = &sid {
         if !resume && res.rc != 0 && res.stdout.is_empty() && is_already_exists(&res.stderr) {
@@ -385,7 +402,11 @@ fn codex_workdir(rt: &Runtime) -> String {
 }
 
 /// 从 codex 的 stderr banner 里抓会话 id 并登记（含落盘）。
-fn remember_codex_session(rt: &Runtime, session_key: Option<&str>, stderr_text: &str) -> Option<String> {
+fn remember_codex_session(
+    rt: &Runtime,
+    session_key: Option<&str>,
+    stderr_text: &str,
+) -> Option<String> {
     let key = session_key?;
     let found = codex_session_id(stderr_text)?;
     Some(rt.sessions.codex_setdefault(key, &found))
@@ -415,14 +436,21 @@ fn codex_session_id(stderr_text: &str) -> Option<String> {
     }
 }
 
-fn run_codex(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Option<&str>, timeout_s: f64) -> CliResult {
+fn run_codex(
+    rt: &Runtime,
+    prompt: &str,
+    cli_model: &str,
+    session_key: Option<&str>,
+    timeout_s: f64,
+) -> CliResult {
     if let Some(prefix) = &rt.codex_cmd {
         let mut argv = prefix.clone();
         argv.push(prompt.to_string());
         return run_cli(&argv, Some(&codex_workdir(rt)), timeout_s);
     }
     let workdir = codex_workdir(rt);
-    let last_msg = std::env::temp_dir().join(format!("cli_backend_codex_{}.txt", std::process::id()));
+    let last_msg =
+        std::env::temp_dir().join(format!("cli_backend_codex_{}.txt", std::process::id()));
 
     // 首次使用时把磁盘映射读进内存缓存（重启后 codex 会话仍能续上）
     if !rt.sessions.codex_is_loaded() {
@@ -460,11 +488,7 @@ fn run_codex(rt: &Runtime, prompt: &str, cli_model: &str, session_key: Option<&s
 
     let mut res = run_cli(&build(&sid, false), Some(&workdir), timeout_s);
     // 非 git 仓库/未受信任目录 → 加 --skip-git-repo-check 重试一次
-    if !res.timed_out
-        && res.rc != 0
-        && res.stdout.is_empty()
-        && codex_untrusted(&res.stderr)
-    {
+    if !res.timed_out && res.rc != 0 && res.stdout.is_empty() && codex_untrusted(&res.stderr) {
         res = run_cli(&build(&sid, true), Some(&workdir), timeout_s);
     }
 
@@ -558,9 +582,7 @@ fn build_gateway(rt: Arc<Runtime>) -> Gateway {
     });
 
     // 本件的 404 不带 path 字段（照迁移前的字面量回）
-    gw.not_found(|_req| {
-        Ok(Reply::json(404, json!({"ok": false, "error": "not_found"})))
-    });
+    gw.not_found(|_req| Ok(Reply::json(404, json!({"ok": false, "error": "not_found"}))));
 
     gw.route("/healthz", &["GET"], false, {
         let rt = rt.clone();
@@ -634,7 +656,10 @@ fn chat_completions(rt: &Runtime, req: &web_gateway::Request) -> ApiReply {
     let body: Value = match req.json_body(cb::MAX_BODY_BYTES) {
         Ok(v) => v,
         Err(_) => {
-            return (400, json!({"ok": false, "error": "bad_request", "detail": "invalid json"}))
+            return (
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "invalid json"}),
+            )
         }
     };
     if !body.is_object() {
@@ -643,7 +668,10 @@ fn chat_completions(rt: &Runtime, req: &web_gateway::Request) -> ApiReply {
 
     let model = body.get("model").and_then(Value::as_str).unwrap_or("");
     if model.trim().is_empty() {
-        return (400, json!({"ok": false, "error": "bad_request", "detail": "missing model"}));
+        return (
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "missing model"}),
+        );
     }
     let Some((member, cli_model)) = cb::resolve_model(model) else {
         return (
@@ -654,18 +682,32 @@ fn chat_completions(rt: &Runtime, req: &web_gateway::Request) -> ApiReply {
     };
 
     let Some(messages) = body.get("messages").filter(|m| m.is_array()) else {
-        return (400, json!({"ok": false, "error": "bad_request", "detail": "missing messages"}));
+        return (
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "missing messages"}),
+        );
     };
     if messages.as_array().unwrap().is_empty() {
-        return (400, json!({"ok": false, "error": "bad_request", "detail": "missing messages"}));
+        return (
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "missing messages"}),
+        );
     }
     let Some(prompt) = cb::build_prompt(messages) else {
-        return (400, json!({"ok": false, "error": "bad_request", "detail": "no user content"}));
+        return (
+            400,
+            json!({"ok": false, "error": "bad_request", "detail": "no user content"}),
+        );
     };
 
     let timeout_s = match cb::clamp_timeout(body.get("timeout_s")) {
         Some(t) => t,
-        None => return (400, json!({"ok": false, "error": "bad_request", "detail": "bad timeout_s"})),
+        None => {
+            return (
+                400,
+                json!({"ok": false, "error": "bad_request", "detail": "bad timeout_s"}),
+            )
+        }
     };
 
     let session_key = body
@@ -674,7 +716,15 @@ fn chat_completions(rt: &Runtime, req: &web_gateway::Request) -> ApiReply {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    dispatch(rt, &member, &cli_model, model, &prompt, session_key.as_deref(), timeout_s)
+    dispatch(
+        rt,
+        &member,
+        &cli_model,
+        model,
+        &prompt,
+        session_key.as_deref(),
+        timeout_s,
+    )
 }
 
 /// 同一成员串行（各自一把锁，成员之间可并行）；排队等不到 → 503 busy。
@@ -691,7 +741,12 @@ fn dispatch(
         "piagent" => "piagent",
         "claudecode" => "claudecode",
         "codex" => "codex",
-        _ => return (502, json!({"ok": false, "error": "backend_error", "detail": "unknown member"})),
+        _ => {
+            return (
+                502,
+                json!({"ok": false, "error": "backend_error", "detail": "unknown member"}),
+            )
+        }
     }];
     let Some(_guard) = gate.acquire(rt.busy_wait) else {
         log_line(&format!(
@@ -740,7 +795,10 @@ fn dispatch(
         } else {
             tail
         };
-        return (502, json!({"ok": false, "error": "backend_error", "detail": detail}));
+        return (
+            502,
+            json!({"ok": false, "error": "backend_error", "detail": detail}),
+        );
     }
 
     (
@@ -841,16 +899,28 @@ fn parse_args() -> Result<Args, String> {
         let arg = argv[i].as_str();
         match arg {
             "--host" => host = need(&argv, &mut i, "--host")?,
-            "--port" => port = need(&argv, &mut i, "--port")?.parse().map_err(|_| "bad --port")?,
+            "--port" => {
+                port = need(&argv, &mut i, "--port")?
+                    .parse()
+                    .map_err(|_| "bad --port")?
+            }
             "--key-file" => key_file = need(&argv, &mut i, "--key-file")?,
             "--pi-workdir" => pi_workdir = Some(need(&argv, &mut i, "--pi-workdir")?),
             "--claude-workdir" => claude_workdir = Some(need(&argv, &mut i, "--claude-workdir")?),
             "--codex-workdir" => codex_workdir = Some(need(&argv, &mut i, "--codex-workdir")?),
-            "--busy-wait" => busy_wait = need(&argv, &mut i, "--busy-wait")?.parse().map_err(|_| "bad --busy-wait")?,
+            "--busy-wait" => {
+                busy_wait = need(&argv, &mut i, "--busy-wait")?
+                    .parse()
+                    .map_err(|_| "bad --busy-wait")?
+            }
             "--stub" => stub = true,
             "--pi-cmd" => pi_cmd = Some(parse_json_argv(&need(&argv, &mut i, "--pi-cmd")?)?),
-            "--claude-cmd" => claude_cmd = Some(parse_json_argv(&need(&argv, &mut i, "--claude-cmd")?)?),
-            "--codex-cmd" => codex_cmd = Some(parse_json_argv(&need(&argv, &mut i, "--codex-cmd")?)?),
+            "--claude-cmd" => {
+                claude_cmd = Some(parse_json_argv(&need(&argv, &mut i, "--claude-cmd")?)?)
+            }
+            "--codex-cmd" => {
+                codex_cmd = Some(parse_json_argv(&need(&argv, &mut i, "--codex-cmd")?)?)
+            }
             other => return Err(format!("unknown argument: {other}")),
         }
         i += 1;

@@ -70,21 +70,18 @@ fn main() {
     );
 
     let members = opts.members.clone();
-    let creds = match td::resolve_member_creds(
-        &members,
-        &opts.user_entries,
-        &opts.password_file_entries,
-    ) {
-        Ok(c) => c,
-        Err(missing) => {
-            eprintln!("[FATAL] 成员凭据缺失：");
-            for m in &missing {
-                eprintln!("  - {m}");
+    let creds =
+        match td::resolve_member_creds(&members, &opts.user_entries, &opts.password_file_entries) {
+            Ok(c) => c,
+            Err(missing) => {
+                eprintln!("[FATAL] 成员凭据缺失：");
+                for m in &missing {
+                    eprintln!("  - {m}");
+                }
+                eprintln!("提示：nats-passwd.py 需要先跑过；或用 --password-file 显式指定路径。");
+                std::process::exit(2);
             }
-            eprintln!("提示：nats-passwd.py 需要先跑过；或用 --password-file 显式指定路径。");
-            std::process::exit(2);
-        }
-    };
+        };
 
     let counters = Arc::new(td::Counters::new());
     let gate = Arc::new(td::TaskGate::new(opts.queue_size));
@@ -101,73 +98,78 @@ fn main() {
         let stop = stop.clone();
         let nats_url_w = opts.nats_url.clone();
         std::thread::spawn(move || {
-        let worker_conn = nats::NatsClient::new(
-            nats::NatsConfig::from_hosts_str(&nats_url_w, 4222)
-                .unwrap_or_else(|_| nats::NatsConfig::from_hosts_str("127.0.0.1", 4222).unwrap()),
-        );
-        let _ = worker_conn.connect();
-        let conn_for_worker = worker_conn;
-        loop {
-            if stop.load(Ordering::Relaxed) {
-                return;
-            }
-            let Some((payload, reply, member)) = gate.pop(Duration::from_millis(500)) else {
-                continue;
-            };
-            let started = Instant::now();
-            let (text, caller, session_id, timeout_s) =
-                match td::parse_request_payload(&payload) {
-                    Ok(v) => v,
-                    Err(env) => {
-                        counters.inc("bad_requests");
+            let worker_conn = nats::NatsClient::new(
+                nats::NatsConfig::from_hosts_str(&nats_url_w, 4222).unwrap_or_else(|_| {
+                    nats::NatsConfig::from_hosts_str("127.0.0.1", 4222).unwrap()
+                }),
+            );
+            let _ = worker_conn.connect();
+            let conn_for_worker = worker_conn;
+            loop {
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                let Some((payload, reply, member)) = gate.pop(Duration::from_millis(500)) else {
+                    continue;
+                };
+                let started = Instant::now();
+                let (text, caller, session_id, timeout_s) =
+                    match td::parse_request_payload(&payload) {
+                        Ok(v) => v,
+                        Err(env) => {
+                            counters.inc("bad_requests");
+                            counters.inc("errors");
+                            let _ = conn_for_worker.publish(&reply, env.to_string().as_bytes(), "");
+                            gate.release(&member);
+                            continue;
+                        }
+                    };
+                counters.inc("rx_requests");
+                td::log_event(
+                    "req.start",
+                    Some(&member),
+                    &[("from", json!(caller)), ("timeout_s", json!(timeout_s))],
+                );
+                let outcome = call_a2a(
+                    &a2a_url,
+                    a2a_token.as_deref(),
+                    &text,
+                    &caller,
+                    session_id.as_deref(),
+                    timeout_s,
+                );
+                let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+                let reply_payload = match outcome {
+                    Ok(body) => {
+                        counters.inc("ok");
+                        td::log_event(
+                            "req.done",
+                            Some(&member),
+                            &[("elapsed_ms", json!(elapsed_ms))],
+                        );
+                        body
+                    }
+                    Err((kind, detail, status)) => {
+                        if kind == "timeout" {
+                            counters.inc("timeouts");
+                        }
                         counters.inc("errors");
-                        let _ = conn_for_worker.publish(&reply, env.to_string().as_bytes(), "");
-                        gate.release(&member);
-                        continue;
+                        td::log_event(
+                            "req.error",
+                            Some(&member),
+                            &[("error", json!(kind)), ("elapsed_ms", json!(elapsed_ms))],
+                        );
+                        td::err_envelope(&kind, &detail, status)
                     }
                 };
-            counters.inc("rx_requests");
-            td::log_event(
-                "req.start",
-                Some(&member),
-                &[("from", json!(caller)), ("timeout_s", json!(timeout_s))],
-            );
-            let outcome = call_a2a(
-                &a2a_url,
-                a2a_token.as_deref(),
-                &text,
-                &caller,
-                session_id.as_deref(),
-                timeout_s,
-            );
-            let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-            let reply_payload = match outcome {
-                Ok(body) => {
-                    counters.inc("ok");
-                    td::log_event("req.done", Some(&member), &[("elapsed_ms", json!(elapsed_ms))]);
-                    body
+                if conn_for_worker
+                    .publish(&reply, reply_payload.to_string().as_bytes(), "")
+                    .is_err()
+                {
+                    counters.inc("hb_failed"); // 回投失败走同一计数（诊断面）
                 }
-                Err((kind, detail, status)) => {
-                    if kind == "timeout" {
-                        counters.inc("timeouts");
-                    }
-                    counters.inc("errors");
-                    td::log_event(
-                        "req.error",
-                        Some(&member),
-                        &[
-                            ("error", json!(kind)),
-                            ("elapsed_ms", json!(elapsed_ms)),
-                        ],
-                    );
-                    td::err_envelope(&kind, &detail, status)
-                }
-            };
-            if conn_for_worker.publish(&reply, reply_payload.to_string().as_bytes(), "").is_err() {
-                counters.inc("hb_failed"); // 回投失败走同一计数（诊断面）
+                gate.release(&member);
             }
-            gate.release(&member);
-        }
         });
     }
 
@@ -404,12 +406,20 @@ fn member_loop(ctx: MemberLoop) {
                                 "retry_after_ms": sub_busy_retry,
                             });
                             // 回投由 worker 连接完成；此处只记录
-                            td::log_event("req.busy", Some(&sub_member), &[("reason", json!(reason)), ("reply_to", json!(reply_to))]);
+                            td::log_event(
+                                "req.busy",
+                                Some(&sub_member),
+                                &[("reason", json!(reason)), ("reply_to", json!(reply_to))],
+                            );
                             // busy 也必须回：直接在本连接回（publish 带 reply 参数为空）
                             busy_reply(&sub_member, reply_to, &env);
                         }
                         Ok(()) => {
-                            if let Err(e) = sub_gate.enqueue(payload.to_vec(), reply_to.to_string(), &sub_member) {
+                            if let Err(e) = sub_gate.enqueue(
+                                payload.to_vec(),
+                                reply_to.to_string(),
+                                &sub_member,
+                            ) {
                                 sub_counters.inc("busy_rejected");
                                 let env = json!({
                                     "ok": false,
@@ -515,8 +525,13 @@ fn call_a2a(
             Some(resp.status),
         ));
     }
-    let value: Value = serde_json::from_slice(&resp.body)
-        .map_err(|e| ("bad_response".to_string(), format!("A2A 响应不是 JSON: {e}"), None))?;
+    let value: Value = serde_json::from_slice(&resp.body).map_err(|e| {
+        (
+            "bad_response".to_string(),
+            format!("A2A 响应不是 JSON: {e}"),
+            None,
+        )
+    })?;
     if !value.is_object() {
         return Err((
             "bad_response".to_string(),

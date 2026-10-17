@@ -79,7 +79,8 @@ fn main() {
     };
     let peers = match &peers_path {
         None => Vec::new(),
-        Some(p) => match std::fs::read_to_string(p).map_err(|e| e.to_string())
+        Some(p) => match std::fs::read_to_string(p)
+            .map_err(|e| e.to_string())
             .and_then(|t| edge::load_peers(&t))
         {
             Ok(v) => v,
@@ -103,7 +104,11 @@ fn main() {
         agents,
         peers,
         advertise_host: advertise_host
-            .or(if cfg_host.is_empty() { None } else { Some(cfg_host) })
+            .or(if cfg_host.is_empty() {
+                None
+            } else {
+                Some(cfg_host)
+            })
             .unwrap_or_else(|| host.clone()),
         advertise_port: advertise_port
             .or(cfg_port.map(|p| p as u16))
@@ -176,10 +181,18 @@ fn main() {
             let agent_id = &parts[1];
             let cfg = rt_t.agents.get(agent_id);
             return match cfg {
-                None => Ok(Reply::json(404, json!({"ok": false, "error": "unknown_agent"}))),
+                None => Ok(Reply::json(
+                    404,
+                    json!({"ok": false, "error": "unknown_agent"}),
+                )),
                 Some(cfg) => Ok(Reply::json(
                     200,
-                    edge::build_agent_card(agent_id, cfg, &rt_t.advertise_host, rt_t.advertise_port),
+                    edge::build_agent_card(
+                        agent_id,
+                        cfg,
+                        &rt_t.advertise_host,
+                        rt_t.advertise_port,
+                    ),
                 )),
             };
         }
@@ -233,7 +246,11 @@ fn main() {
         rt.node_id,
         host,
         port,
-        if agent_names.is_empty() { "-".to_string() } else { agent_names.join(",") }
+        if agent_names.is_empty() {
+            "-".to_string()
+        } else {
+            agent_names.join(",")
+        }
     );
 
     if let Err(e) = gw.serve(&host, port) {
@@ -246,35 +263,58 @@ fn main() {
 /// web_gateway 的 raw_path 保留；`//a` 切出空段全丢）。
 fn split_parts(raw_path: &str) -> Vec<String> {
     let path = raw_path.split(['?', '#']).next().unwrap_or("");
-    path.split('/').filter(|s| !s.is_empty()).map(String::from).collect()
+    path.split('/')
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
 }
 
-fn handle_post_messages(req: &Request, rt: &Runtime) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
+fn handle_post_messages(
+    req: &Request,
+    rt: &Runtime,
+) -> Result<Reply, hacs_l1_transport::web_gateway::HttpError> {
     let parts = split_parts(&req.raw_path);
     if !(parts.len() == 3 && parts[0] == "a2a" && parts[2] == "messages") {
         return Ok(Reply::json(404, json!({"ok": false, "error": "not_found"})));
     }
     let peer = match edge::auth_peer(req.header("Authorization"), &rt.peers, rt.allow_anon) {
         Some(p) => p,
-        None => return Ok(Reply::json(401, json!({"ok": false, "error": "unauthorized"}))),
+        None => {
+            return Ok(Reply::json(
+                401,
+                json!({"ok": false, "error": "unauthorized"}),
+            ))
+        }
     };
     let agent_id = &parts[1];
     let Some(cfg) = rt.agents.get(agent_id) else {
-        return Ok(Reply::json(404, json!({"ok": false, "error": "unknown_agent"})));
+        return Ok(Reply::json(
+            404,
+            json!({"ok": false, "error": "unknown_agent"}),
+        ));
     };
     let body: Value = match serde_json::from_slice::<Value>(&req.body) {
         Ok(v) if v.is_object() => v,
-        _ => return Ok(Reply::json(400, json!({"ok": false, "error": "bad_request"}))),
+        _ => {
+            return Ok(Reply::json(
+                400,
+                json!({"ok": false, "error": "bad_request"}),
+            ))
+        }
     };
     let msg = match edge::parse_message_body(&body) {
         Ok(m) => m,
-        Err((status, err)) => {
-            return Ok(Reply::json(status, json!({"ok": false, "error": err})))
-        }
+        Err((status, err)) => return Ok(Reply::json(status, json!({"ok": false, "error": err}))),
     };
 
     let started = Instant::now();
-    let (code, result) = call_backend(cfg, &msg.text, msg.timeout_s, msg.session_id.as_deref(), &peer);
+    let (code, result) = call_backend(
+        cfg,
+        &msg.text,
+        msg.timeout_s,
+        msg.session_id.as_deref(),
+        &peer,
+    );
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
     if code != 200 {
@@ -344,7 +384,8 @@ fn http_post_json(
     sock.write_all(&req).map_err(|e| format!("发送失败: {e}"))?;
     sock.flush().ok();
     let mut raw = Vec::new();
-    sock.read_to_end(&mut raw).map_err(|e| format!("读取失败: {e}"))?;
+    sock.read_to_end(&mut raw)
+        .map_err(|e| format!("读取失败: {e}"))?;
     let split = raw
         .windows(4)
         .position(|w| w == b"\r\n\r\n")
@@ -371,7 +412,10 @@ fn single_round(
     let (url, payload) = edge::build_single_round_request(agent, messages, user_field)?;
     let body = payload.to_string();
     let mut headers: Vec<(&str, String)> = vec![
-        ("Content-Type", "application/json; charset=utf-8".to_string()),
+        (
+            "Content-Type",
+            "application/json; charset=utf-8".to_string(),
+        ),
         ("x-openclaw-message-channel", "a2a".to_string()),
     ];
     if let Some(key) = agent.get("api_key").and_then(Value::as_str) {
@@ -391,11 +435,7 @@ fn single_round(
             }
         }
         Ok((status, resp_body)) if !(200..300).contains(&status) => {
-            let detail = format!(
-                "HTTP {} {}",
-                status,
-                String::from_utf8_lossy(&resp_body)
-            );
+            let detail = format!("HTTP {} {}", status, String::from_utf8_lossy(&resp_body));
             Err((
                 502,
                 json!({"ok": false, "error": "backend_error", "detail": edge::truncate_detail(&detail)}),

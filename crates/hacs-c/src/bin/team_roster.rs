@@ -23,7 +23,10 @@ fn main() {
         match a.as_str() {
             "--nats-host" => host = args.next(),
             "--nats-port" => {
-                port = args.next().and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_PORT)
+                port = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(DEFAULT_PORT)
             }
             "--user" => user = args.next().unwrap_or_default(),
             "--password-file" => password_file = args.next().unwrap_or_default(),
@@ -68,11 +71,15 @@ fn main() {
 
     let window = std::sync::Arc::new(std::sync::Mutex::new(HbWindow::new()));
     let win_cb = window.clone();
-    let _ = client.subscribe("team.hb.>", move |payload: &[u8], _reply: &str| {
-        if let Ok(mut w) = win_cb.lock() {
-            w.feed(payload);
-        }
-    }, "hb");
+    let _ = client.subscribe(
+        "team.hb.>",
+        move |payload: &[u8], _reply: &str| {
+            if let Ok(mut w) = win_cb.lock() {
+                w.feed(payload);
+            }
+        },
+        "hb",
+    );
     let _ = client.flush(Duration::from_secs(5));
 
     let deadline = Duration::from_secs_f64(wait.max(1.0));
@@ -86,7 +93,10 @@ fn main() {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let rows = window.lock().map(|w| w.roster_rows(now)).unwrap_or_default();
+    let rows = window
+        .lock()
+        .map(|w| w.roster_rows(now))
+        .unwrap_or_default();
 
     if json_out {
         let errs = client.last_err().unwrap_or_default();
@@ -112,7 +122,10 @@ fn main() {
                 r["member"].as_str().unwrap_or(""),
                 r["host"].as_str().unwrap_or(""),
                 r["age_s"],
-                r["uptime_s"].as_i64().map(|v| v.to_string()).unwrap_or_default(),
+                r["uptime_s"]
+                    .as_i64()
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
                 r["version"].as_str().unwrap_or(""),
             );
         }
