@@ -218,3 +218,13 @@
     cast 前 ::text 双跳，沿 rt_remind 教训）；数值参数按 i64/f64 二进制绑定。
     内存对比（一次性 CLI，`/usr/bin/time -v` Max RSS，tasks --limit 50）：Python 28,584 kB
     vs Rust release 2,944 kB —— **降至 Python 的 ~10.3%（省 ~89.7%）**。
+
+49. group_watch_pending（+bin group_watch 组合根）：State 落盘格式/键名与 Python 一致
+    （done/last/chain，"sid|member|seq"）；人的 @ 优先、Agent @ 带 max-chain、人说话链条
+    归零、(sid,member) gap 限流、mark 先于回复检查（NATS 失败也记账不重发）=Python；
+    mentions 结构化解析（群内过滤、"所有人"→@all、frm 首位补齐）。真 chat_svc E2E：
+    pending 识别/点名/NATS 失败不写回/幂等跳过与 Python 逐行对齐（同群同 seq 同输出）。
+    内存对比（--once，`/usr/bin/time -v` Max RSS）：Python 26,112 kB vs Rust release
+    1,408 kB —— **降至 Python 的 ~5.4%（省 ~94.6%）**。回复写回链路（deliver→reply→
+    post_reply）由 L3 单测 FakeDlv 覆盖；真 NATS 集成路径复用 team_group/broadcast
+    已验证的 call_one 实现（本机无 nats-server，登记限制同 PARITY 前件）。
